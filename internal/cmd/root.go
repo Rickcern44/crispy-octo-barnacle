@@ -16,5 +16,6 @@ func NewRootCommand() *cobra.Command {
 	}
 	command.Version = version
 	command.AddCommand(newInitCommand())
+	addWorkflowCommands(command)
 	return command
 }
