@@ -52,6 +52,7 @@ func Migrate(path string) error {
 		return fmt.Errorf("open database: %w", err)
 	}
 	defer database.Close()
+	database.SetMaxOpenConns(1)
 	return applyMigrations(database)
 }
 
@@ -78,6 +79,12 @@ func applyMigrations(database *sql.DB) error {
 		if err != nil {
 			return fmt.Errorf("read migration %s: %w", name, err)
 		}
+		disableForeignKeys := version == "0005_conventional_statuses"
+		if disableForeignKeys {
+			if _, err := database.Exec(`PRAGMA foreign_keys = OFF`); err != nil {
+				return fmt.Errorf("disable foreign keys for migration %s: %w", version, err)
+			}
+		}
 		transaction, err := database.Begin()
 		if err != nil {
 			return fmt.Errorf("begin migration %s: %w", version, err)
@@ -91,7 +98,15 @@ func applyMigrations(database *sql.DB) error {
 			return fmt.Errorf("record migration %s: %w", version, err)
 		}
 		if err := transaction.Commit(); err != nil {
+			if disableForeignKeys {
+				_, _ = database.Exec(`PRAGMA foreign_keys = ON`)
+			}
 			return fmt.Errorf("commit migration %s: %w", version, err)
+		}
+		if disableForeignKeys {
+			if _, err := database.Exec(`PRAGMA foreign_keys = ON`); err != nil {
+				return fmt.Errorf("restore foreign keys after migration %s: %w", version, err)
+			}
 		}
 	}
 	return nil

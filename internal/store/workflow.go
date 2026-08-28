@@ -161,7 +161,7 @@ func UpdateItem(database *sql.DB, id int64, title, description, category, horizo
 	return GetItem(database, id)
 }
 func SetItemStatus(database *sql.DB, id int64, status string) error {
-	result, err := database.Exec(`UPDATE roadmap_items SET status=?, updated_at=? WHERE id=? AND status='Proposed'`, status, now(), id)
+	result, err := database.Exec(`UPDATE roadmap_items SET status=?, updated_at=? WHERE id=? AND status='Planned'`, status, now(), id)
 	if err != nil {
 		return err
 	}
@@ -191,8 +191,8 @@ func CreatePlan(database *sql.DB, itemID int64, content string) (Plan, error) {
 	} else if err != nil {
 		return Plan{}, err
 	}
-	if status != "Approved" {
-		return Plan{}, fmt.Errorf("only approved roadmap items may receive plans")
+	if status != "Ready" {
+		return Plan{}, fmt.Errorf("only ready roadmap items may receive plans")
 	}
 	var revision int
 	if err := database.QueryRow(`SELECT COALESCE(MAX(revision),0)+1 FROM plan_revisions WHERE roadmap_item_id=?`, itemID).Scan(&revision); err != nil {
@@ -241,9 +241,9 @@ func ApprovePlan(database *sql.DB, id int64) error {
 		transaction.Rollback()
 		return err
 	}
-	if itemStatus != "Approved" {
+	if itemStatus != "Ready" {
 		transaction.Rollback()
-		return fmt.Errorf("only plans for approved roadmap items may be approved")
+		return fmt.Errorf("only plans for ready roadmap items may be approved")
 	}
 	if _, err := transaction.Exec(`UPDATE plan_revisions SET status='Approved', approved_at=? WHERE id=?`, now(), id); err != nil {
 		transaction.Rollback()
@@ -319,8 +319,8 @@ func SetTaskStatus(database *sql.DB, id int64, status, outcome string) error {
 	if err != nil {
 		return err
 	}
-	if status == "Active" {
-		if task.Status != "Pending" {
+	if status == "In Progress" {
+		if task.Status != "To Do" {
 			return fmt.Errorf("only pending tasks may start")
 		}
 		var planStatus string
@@ -330,16 +330,16 @@ func SetTaskStatus(database *sql.DB, id int64, status, outcome string) error {
 		if planStatus != "Approved" {
 			return fmt.Errorf("tasks cannot start without an approved plan revision")
 		}
-	} else if task.Status != "Active" {
+	} else if task.Status != "In Progress" {
 		return fmt.Errorf("only active tasks may be %s", status)
 	}
 	timestamp := now()
 	query := `UPDATE tasks SET status=?, outcome=?`
 	args := []any{status, outcome}
-	if status == "Active" {
+	if status == "In Progress" {
 		query += `, started_at=?`
 		args = append(args, timestamp)
-	} else if status == "Completed" {
+	} else if status == "Done" {
 		query += `, completed_at=?`
 		args = append(args, timestamp)
 	} else {

@@ -23,7 +23,7 @@ func TestRecordApprovedPlanIsAtomicAndPreservesApprovalEvidence(t *testing.T) {
 	if recorded.Plan.Status != "Approved" || recorded.Plan.ApprovalNote != "Approved in Codex" {
 		t.Fatalf("recorded plan = %+v", recorded.Plan)
 	}
-	if len(recorded.Tasks) != 1 || recorded.Tasks[0].Status != "Pending" {
+	if len(recorded.Tasks) != 1 || recorded.Tasks[0].Status != "To Do" {
 		t.Fatalf("recorded tasks = %+v", recorded.Tasks)
 	}
 	var items, plans, tasks int

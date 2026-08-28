@@ -130,9 +130,9 @@ func itemCommand() *cobra.Command {
 	list.Flags().BoolVar(&asJSON, "json", false, "emit JSON")
 	show := showItemCommand()
 	update := updateItemCommand()
-	approve := itemTransitionCommand("approve", "Approved")
-	decline := itemTransitionCommand("decline", "Declined")
-	command.AddCommand(add, list, show, update, approve, decline)
+	ready := itemTransitionCommand("ready", "Ready")
+	cancel := itemTransitionCommand("cancel", "Won’t Do")
+	command.AddCommand(add, list, show, update, ready, cancel)
 	return command
 }
 func showItemCommand() *cobra.Command {
@@ -362,8 +362,8 @@ func taskCommand() *cobra.Command {
 		return output(command, task, showJSON)
 	}}
 	show.Flags().BoolVar(&showJSON, "json", false, "emit JSON")
-	start := taskTransitionCommand("start", "Active", false)
-	complete := taskTransitionCommand("complete", "Completed", true)
+	start := taskTransitionCommand("start", "In Progress", false)
+	complete := taskTransitionCommand("complete", "Done", true)
 	block := taskTransitionCommand("block", "Blocked", true)
 	command.AddCommand(add, list, show, start, complete, block)
 	return command

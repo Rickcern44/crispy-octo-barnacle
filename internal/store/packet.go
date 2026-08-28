@@ -87,11 +87,11 @@ func RecordApprovedPlan(database *sql.DB, packet PlanPacket, approvalNote string
 			return RecordedPlan{}, fmt.Errorf("roadmap item %d not found", itemID)
 		} else if err != nil {
 			return RecordedPlan{}, err
-		} else if status != "Approved" {
-			return RecordedPlan{}, fmt.Errorf("roadmap item %d is not approved", itemID)
+		} else if status != "Ready" {
+			return RecordedPlan{}, fmt.Errorf("roadmap item %d is not ready", itemID)
 		}
 	} else {
-		result, err := transaction.Exec(`INSERT INTO roadmap_items(title,description,category_id,horizon,status,rationale,created_at,updated_at) SELECT ?,?,id,?,'Approved',?,?,? FROM categories WHERE name=?`, packet.RoadmapItem.Title, packet.RoadmapItem.Description, packet.RoadmapItem.Horizon, packet.RoadmapItem.Rationale, timestamp, timestamp, packet.RoadmapItem.Category)
+		result, err := transaction.Exec(`INSERT INTO roadmap_items(title,description,category_id,horizon,status,rationale,created_at,updated_at) SELECT ?,?,id,?,'Ready',?,?,? FROM categories WHERE name=?`, packet.RoadmapItem.Title, packet.RoadmapItem.Description, packet.RoadmapItem.Horizon, packet.RoadmapItem.Rationale, timestamp, timestamp, packet.RoadmapItem.Category)
 		if err != nil {
 			return RecordedPlan{}, err
 		}
@@ -122,7 +122,7 @@ func RecordApprovedPlan(database *sql.DB, packet PlanPacket, approvalNote string
 		if err != nil {
 			return RecordedPlan{}, err
 		}
-		tasks = append(tasks, Task{ID: taskID, PlanID: planID, Title: packetTask.Title, Description: packetTask.Description, Status: "Pending", CreatedAt: timestamp})
+		tasks = append(tasks, Task{ID: taskID, PlanID: planID, Title: packetTask.Title, Description: packetTask.Description, Status: "To Do", CreatedAt: timestamp})
 	}
 	if err := transaction.Commit(); err != nil {
 		return RecordedPlan{}, err

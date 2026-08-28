@@ -16,10 +16,10 @@ type Context struct {
 func CompactContext(database *sql.DB) (Context, error) {
 	var context Context
 	var err error
-	if context.ActiveTasks, err = tasksByStatus(database, "Active", 0); err != nil {
+	if context.ActiveTasks, err = tasksByStatus(database, "In Progress", 0); err != nil {
 		return context, err
 	}
-	if context.ProposedItems, err = itemsByStatus(database, "Proposed"); err != nil {
+	if context.ProposedItems, err = itemsByStatus(database, "Planned"); err != nil {
 		return context, err
 	}
 	if context.PlansAwaiting, err = plansByStatus(database, "Draft"); err != nil {
@@ -28,7 +28,7 @@ func CompactContext(database *sql.DB) (Context, error) {
 	if context.BlockedTasks, err = tasksByStatus(database, "Blocked", 0); err != nil {
 		return context, err
 	}
-	if context.RecentlyCompleted, err = tasksByStatus(database, "Completed", 10); err != nil {
+	if context.RecentlyCompleted, err = tasksByStatus(database, "Done", 10); err != nil {
 		return context, err
 	}
 	return context, nil

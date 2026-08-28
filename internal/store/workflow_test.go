@@ -22,7 +22,7 @@ func TestWorkflowEnforcesApprovalAndImmutablePlans(t *testing.T) {
 	if _, err := CreatePlan(database, item.ID, "implementation"); err == nil {
 		t.Fatal("CreatePlan() succeeded for proposed item")
 	}
-	if err := SetItemStatus(database, item.ID, "Approved"); err != nil {
+	if err := SetItemStatus(database, item.ID, "Ready"); err != nil {
 		t.Fatal(err)
 	}
 	plan, err := CreatePlan(database, item.ID, "implementation")
@@ -33,7 +33,7 @@ func TestWorkflowEnforcesApprovalAndImmutablePlans(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := SetTaskStatus(database, task.ID, "Active", ""); err == nil {
+	if err := SetTaskStatus(database, task.ID, "In Progress", ""); err == nil {
 		t.Fatal("SetTaskStatus() started task before plan approval")
 	}
 	if err := ApprovePlan(database, plan.ID); err != nil {
@@ -42,10 +42,10 @@ func TestWorkflowEnforcesApprovalAndImmutablePlans(t *testing.T) {
 	if _, err := AddTask(database, plan.ID, "Late work", ""); err == nil {
 		t.Fatal("AddTask() modified approved plan")
 	}
-	if err := SetTaskStatus(database, task.ID, "Active", ""); err != nil {
+	if err := SetTaskStatus(database, task.ID, "In Progress", ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := SetTaskStatus(database, task.ID, "Completed", "done"); err != nil {
+	if err := SetTaskStatus(database, task.ID, "Done", "done"); err != nil {
 		t.Fatal(err)
 	}
 }

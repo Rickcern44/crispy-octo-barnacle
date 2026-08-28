@@ -35,7 +35,7 @@ func TestRunAcceptsValidStateAndRejectsBrokenLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.SetItemStatus(database, item.ID, "Approved"); err != nil {
+	if err := store.SetItemStatus(database, item.ID, "Ready"); err != nil {
 		t.Fatal(err)
 	}
 	plan, err := store.CreatePlan(database, item.ID, "Plan")
@@ -46,7 +46,7 @@ func TestRunAcceptsValidStateAndRejectsBrokenLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := database.Exec(`UPDATE tasks SET status='Completed' WHERE id=?`, task.ID); err != nil {
+	if _, err := database.Exec(`UPDATE tasks SET status='Done' WHERE id=?`, task.ID); err != nil {
 		t.Fatal(err)
 	}
 	if err := Run(state); err == nil {

@@ -102,12 +102,12 @@ func foreignKeyCheck(database *sql.DB) error {
 
 func workflowCheck(database *sql.DB) error {
 	checks := []struct{ query, message string }{
-		{`SELECT COUNT(*) FROM plan_revisions p JOIN roadmap_items i ON i.id=p.roadmap_item_id WHERE p.status='Approved' AND (p.approved_at IS NULL OR i.status!='Approved')`, "approved plans must belong to approved items and have approval timestamps"},
+		{`SELECT COUNT(*) FROM plan_revisions p JOIN roadmap_items i ON i.id=p.roadmap_item_id WHERE p.status='Approved' AND (p.approved_at IS NULL OR i.status!='Ready')`, "approved plans must belong to ready items and have approval timestamps"},
 		{`SELECT COUNT(*) FROM plan_revisions WHERE status='Draft' AND approved_at IS NOT NULL`, "draft plans cannot have approval timestamps"},
-		{`SELECT COUNT(*) FROM tasks t JOIN plan_revisions p ON p.id=t.plan_revision_id WHERE t.status IN ('Active','Completed','Blocked') AND p.status!='Approved'`, "started, completed, and blocked tasks must belong to approved plans"},
-		{`SELECT COUNT(*) FROM tasks WHERE status='Pending' AND (started_at IS NOT NULL OR completed_at IS NOT NULL OR blocked_at IS NOT NULL)`, "pending tasks cannot have lifecycle timestamps"},
-		{`SELECT COUNT(*) FROM tasks WHERE status='Active' AND started_at IS NULL`, "active tasks need a start timestamp"},
-		{`SELECT COUNT(*) FROM tasks WHERE status='Completed' AND (started_at IS NULL OR completed_at IS NULL OR outcome='')`, "completed tasks need start, completion, and outcome data"},
+		{`SELECT COUNT(*) FROM tasks t JOIN plan_revisions p ON p.id=t.plan_revision_id WHERE t.status IN ('In Progress','Done','Blocked') AND p.status!='Approved'`, "started, done, and blocked tasks must belong to approved plans"},
+		{`SELECT COUNT(*) FROM tasks WHERE status='To Do' AND (started_at IS NOT NULL OR completed_at IS NOT NULL OR blocked_at IS NOT NULL)`, "to-do tasks cannot have lifecycle timestamps"},
+		{`SELECT COUNT(*) FROM tasks WHERE status='In Progress' AND started_at IS NULL`, "in-progress tasks need a start timestamp"},
+		{`SELECT COUNT(*) FROM tasks WHERE status='Done' AND (started_at IS NULL OR completed_at IS NULL OR outcome='')`, "done tasks need start, completion, and outcome data"},
 		{`SELECT COUNT(*) FROM tasks WHERE status='Blocked' AND (started_at IS NULL OR blocked_at IS NULL OR outcome='')`, "blocked tasks need start, block, and outcome data"},
 	}
 	for _, check := range checks {
