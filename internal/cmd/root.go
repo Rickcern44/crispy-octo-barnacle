@@ -15,5 +15,6 @@ func NewRootCommand() *cobra.Command {
 		SilenceUsage:  true,
 	}
 	command.Version = version
+	command.AddCommand(newInitCommand())
 	return command
 }
