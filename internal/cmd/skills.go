@@ -43,5 +43,51 @@ func newSkillsCommand() *cobra.Command {
 	}}
 	status.Flags().BoolVar(&statusJSON, "json", false, "emit JSON")
 	command.AddCommand(installCommand, list, status)
+	var updateAgent, updateScope string
+	var updateJSON bool
+	update := &cobra.Command{Use: "update", RunE: func(command *cobra.Command, _ []string) error {
+		root, state, err := currentProject()
+		if err != nil {
+			return err
+		}
+		result, err := install.Update(root, state, updateAgent, updateScope)
+		if err != nil {
+			return err
+		}
+		return output(command, result, updateJSON)
+	}}
+	update.Flags().StringVar(&updateAgent, "agent", "codex", "runtime agent")
+	update.Flags().StringVar(&updateScope, "scope", "project", "installation scope")
+	update.Flags().BoolVar(&updateJSON, "json", false, "emit JSON")
+	var uninstallAgent, uninstallScope string
+	var uninstallJSON bool
+	uninstall := &cobra.Command{Use: "uninstall", RunE: func(command *cobra.Command, _ []string) error {
+		root, state, err := currentProject()
+		if err != nil {
+			return err
+		}
+		result, err := install.Uninstall(root, state, uninstallAgent, uninstallScope)
+		if err != nil {
+			return err
+		}
+		return output(command, result, uninstallJSON)
+	}}
+	uninstall.Flags().StringVar(&uninstallAgent, "agent", "codex", "runtime agent")
+	uninstall.Flags().StringVar(&uninstallScope, "scope", "project", "installation scope")
+	uninstall.Flags().BoolVar(&uninstallJSON, "json", false, "emit JSON")
+	var doctorJSON bool
+	doctor := &cobra.Command{Use: "doctor", RunE: func(command *cobra.Command, _ []string) error {
+		root, state, err := currentProject()
+		if err != nil {
+			return err
+		}
+		report, err := install.Doctor(root, state)
+		if err != nil {
+			return err
+		}
+		return output(command, report, doctorJSON)
+	}}
+	doctor.Flags().BoolVar(&doctorJSON, "json", false, "emit JSON")
+	command.AddCommand(update, uninstall, doctor)
 	return command
 }

@@ -32,6 +32,17 @@ type InstallResult struct {
 	Destination string   `json:"destination"`
 	Changes     []Change `json:"changes"`
 }
+type LifecycleResult struct {
+	Agent    string   `json:"agent"`
+	Scope    string   `json:"scope"`
+	Changes  []Change `json:"changes"`
+	Warnings []string `json:"warnings"`
+}
+type DoctorReport struct {
+	Status   string   `json:"status"`
+	Checks   []string `json:"checks"`
+	Warnings []string `json:"warnings"`
+}
 type Manifest struct {
 	SchemaVersion int            `json:"schema_version"`
 	Installations []Installation `json:"installations"`
@@ -122,6 +133,95 @@ func Status(repositoryRoot, stateDir string) (Manifest, error) {
 		}
 	}
 	return manifest, nil
+}
+
+func Update(repositoryRoot, stateDir, agent, scope string) (LifecycleResult, error) {
+	manifest, err := readManifest(ManifestPath(stateDir))
+	if err != nil {
+		return LifecycleResult{}, err
+	}
+	installation := findInstallation(manifest, agent, scope)
+	if installation == nil {
+		return LifecycleResult{}, fmt.Errorf("no managed %s %s skill installation", scope, agent)
+	}
+	assets, err := portableAssets()
+	if err != nil {
+		return LifecycleResult{}, err
+	}
+	destination := filepath.Join(repositoryRoot, filepath.FromSlash(installation.Destination))
+	result := LifecycleResult{Agent: agent, Scope: scope}
+	for _, file := range installation.Files {
+		contents, err := os.ReadFile(filepath.Join(destination, file.Path))
+		if err != nil || hash(contents) != file.SHA256 {
+			return result, fmt.Errorf("managed skill file has changed or is missing: %s", filepath.Join(destination, file.Path))
+		}
+	}
+	for path, contents := range assets {
+		if err := writeFileAtomically(filepath.Join(destination, path), contents, 0o644); err != nil {
+			return result, err
+		}
+		result.Changes = append(result.Changes, Change{Path: filepath.Join(destination, path), Action: "update"})
+	}
+	managed := make([]ManagedFile, 0, len(assets))
+	for path, contents := range assets {
+		managed = append(managed, ManagedFile{Path: path, SHA256: hash(contents)})
+	}
+	installation.Files = managed
+	installation.InstalledAt = time.Now().UTC().Format(time.RFC3339Nano)
+	for index := range manifest.Installations {
+		if manifest.Installations[index].Agent == agent && manifest.Installations[index].Scope == scope {
+			manifest.Installations[index] = *installation
+		}
+	}
+	return result, writeManifest(ManifestPath(stateDir), manifest)
+}
+
+func Uninstall(repositoryRoot, stateDir, agent, scope string) (LifecycleResult, error) {
+	manifest, err := readManifest(ManifestPath(stateDir))
+	if err != nil {
+		return LifecycleResult{}, err
+	}
+	installation := findInstallation(manifest, agent, scope)
+	if installation == nil {
+		return LifecycleResult{}, fmt.Errorf("no managed %s %s skill installation", scope, agent)
+	}
+	destination := filepath.Join(repositoryRoot, filepath.FromSlash(installation.Destination))
+	result := LifecycleResult{Agent: agent, Scope: scope}
+	for _, file := range installation.Files {
+		path := filepath.Join(destination, file.Path)
+		contents, err := os.ReadFile(path)
+		if err != nil || hash(contents) != file.SHA256 {
+			result.Warnings = append(result.Warnings, "preserved modified file: "+path)
+			continue
+		}
+		if err := os.Remove(path); err != nil {
+			return result, err
+		}
+		result.Changes = append(result.Changes, Change{Path: path, Action: "remove"})
+	}
+	remaining := make([]Installation, 0, len(manifest.Installations)-1)
+	for _, value := range manifest.Installations {
+		if value.Agent != agent || value.Scope != scope {
+			remaining = append(remaining, value)
+		}
+	}
+	manifest.Installations = remaining
+	return result, writeManifest(ManifestPath(stateDir), manifest)
+}
+
+func Doctor(repositoryRoot, stateDir string) (DoctorReport, error) {
+	manifest, err := Status(repositoryRoot, stateDir)
+	if err != nil {
+		return DoctorReport{Status: "error"}, err
+	}
+	report := DoctorReport{Status: "ok", Checks: []string{"Cassor project discovered", "skills manifest is valid"}}
+	for _, installation := range manifest.Installations {
+		report.Checks = append(report.Checks, "managed "+installation.Agent+" "+installation.Scope+" skill is current")
+	}
+	if len(manifest.Installations) == 0 {
+		report.Warnings = append(report.Warnings, "no Cassor skills are installed")
+	}
+	return report, nil
 }
 
 func portableAssets() (map[string][]byte, error) {

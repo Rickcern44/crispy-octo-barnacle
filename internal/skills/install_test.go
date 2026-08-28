@@ -61,3 +61,31 @@ func TestInstallProtectsConflictingDestinationAndDryRunDoesNotWrite(t *testing.T
 		t.Fatal("Install() accepted conflicting destination")
 	}
 }
+
+func TestUpdateAndUninstallPreserveModifiedFiles(t *testing.T) {
+	root := t.TempDir()
+	state := filepath.Join(root, ".cassor")
+	if err := os.Mkdir(state, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Install(root, state, InstallOptions{Agent: "codex", Scope: "project"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Update(root, state, "codex", "project"); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, ".agents", "skills", "cassor", "SKILL.md")
+	if err := os.WriteFile(path, []byte("custom"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	result, err := Uninstall(root, state, "codex", "project")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Warnings) == 0 {
+		t.Fatal("Uninstall() did not preserve modified file")
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatal(err)
+	}
+}
