@@ -21,13 +21,15 @@ func newSkillsCommand() *cobra.Command {
 		}
 		return output(command, result, asJSON)
 	}}
-	installCommand.Flags().StringVar(&agent, "agent", "", "runtime agent (currently codex)")
+	installCommand.Flags().StringVar(&agent, "agent", "", "runtime agent: codex, claude-code, copilot, or all")
 	installCommand.Flags().StringVar(&scope, "scope", "project", "installation scope")
 	installCommand.Flags().BoolVar(&dryRun, "dry-run", false, "show changes without writing")
 	installCommand.Flags().BoolVar(&asJSON, "json", false, "emit JSON")
 	_ = installCommand.MarkFlagRequired("agent")
 	var listJSON bool
-	list := &cobra.Command{Use: "list", RunE: func(command *cobra.Command, _ []string) error { return output(command, []string{"codex"}, listJSON) }}
+	list := &cobra.Command{Use: "list", RunE: func(command *cobra.Command, _ []string) error {
+		return output(command, []string{"codex", "claude-code", "copilot"}, listJSON)
+	}}
 	list.Flags().BoolVar(&listJSON, "json", false, "emit JSON")
 	var statusJSON bool
 	status := &cobra.Command{Use: "status", RunE: func(command *cobra.Command, _ []string) error {

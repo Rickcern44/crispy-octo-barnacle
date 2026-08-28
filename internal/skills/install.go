@@ -63,8 +63,11 @@ type ManagedFile struct {
 func ManifestPath(stateDir string) string { return filepath.Join(stateDir, manifestName) }
 
 func Install(repositoryRoot, stateDir string, options InstallOptions) (InstallResult, error) {
-	if options.Agent != "codex" {
-		return InstallResult{}, fmt.Errorf("agent %q is not supported yet; use codex", options.Agent)
+	if options.Agent == "all" {
+		return installAll(repositoryRoot, stateDir, options)
+	}
+	if !supportedAgent(options.Agent) {
+		return InstallResult{}, fmt.Errorf("agent %q is not supported", options.Agent)
 	}
 	if options.Scope == "" {
 		options.Scope = "project"
@@ -72,7 +75,7 @@ func Install(repositoryRoot, stateDir string, options InstallOptions) (InstallRe
 	if options.Scope != "project" {
 		return InstallResult{}, fmt.Errorf("scope %q is not supported yet; use project", options.Scope)
 	}
-	destination := filepath.Join(repositoryRoot, ".agents", "skills", "cassor")
+	destination := filepath.Join(repositoryRoot, filepath.FromSlash(destinationFor(options.Agent)))
 	assets, err := portableAssets()
 	if err != nil {
 		return InstallResult{}, err
@@ -111,11 +114,81 @@ func Install(repositoryRoot, stateDir string, options InstallOptions) (InstallRe
 		managed = append(managed, ManagedFile{Path: path, SHA256: hash(contents)})
 	}
 	sort.Slice(managed, func(i, j int) bool { return managed[i].Path < managed[j].Path })
-	manifest.Installations = append(manifest.Installations, Installation{Agent: options.Agent, Scope: options.Scope, Destination: filepath.ToSlash(filepath.Join(".agents", "skills", "cassor")), CassorVersion: "0.1.0-dev", InstalledAt: time.Now().UTC().Format(time.RFC3339Nano), Files: managed})
+	manifest.Installations = append(manifest.Installations, Installation{Agent: options.Agent, Scope: options.Scope, Destination: destinationFor(options.Agent), CassorVersion: "0.1.0-dev", InstalledAt: time.Now().UTC().Format(time.RFC3339Nano), Files: managed})
 	if err := writeManifest(ManifestPath(stateDir), manifest); err != nil {
 		return result, err
 	}
 	return result, nil
+}
+
+func supportedAgent(agent string) bool {
+	return agent == "codex" || agent == "claude-code" || agent == "copilot"
+}
+func destinationFor(agent string) string {
+	switch agent {
+	case "codex":
+		return ".agents/skills/cassor"
+	case "claude-code":
+		return ".claude/skills/cassor"
+	case "copilot":
+		return ".github/skills/cassor"
+	}
+	return ""
+}
+func installAll(root, state string, options InstallOptions) (InstallResult, error) {
+	if options.Scope == "" {
+		options.Scope = "project"
+	}
+	if options.Scope != "project" {
+		return InstallResult{}, fmt.Errorf("scope %q is not supported yet; use project", options.Scope)
+	}
+	assets, err := portableAssets()
+	if err != nil {
+		return InstallResult{}, err
+	}
+	manifest, err := readManifest(ManifestPath(state))
+	if err != nil {
+		return InstallResult{}, err
+	}
+	result := InstallResult{Agent: "all", Scope: options.Scope}
+	for _, agent := range []string{"codex", "claude-code", "copilot"} {
+		destination := filepath.Join(root, filepath.FromSlash(destinationFor(agent)))
+		installation := findInstallation(manifest, agent, options.Scope)
+		if installation != nil {
+			for path, contents := range assets {
+				if err := verifyManagedFile(destination, *installation, path, contents); err != nil {
+					return result, err
+				}
+			}
+			continue
+		}
+		if _, err := os.Stat(destination); err == nil {
+			return result, fmt.Errorf("skill destination %s already exists and is not Cassor-managed", destination)
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return result, err
+		}
+		for path := range assets {
+			result.Changes = append(result.Changes, Change{Path: filepath.Join(destination, path), Action: "create"})
+		}
+	}
+	if options.DryRun {
+		return result, nil
+	}
+	for _, agent := range []string{"codex", "claude-code", "copilot"} {
+		if findInstallation(manifest, agent, options.Scope) != nil {
+			continue
+		}
+		destination := filepath.Join(root, filepath.FromSlash(destinationFor(agent)))
+		if err := writeAtomically(destination, assets); err != nil {
+			return result, err
+		}
+		files := make([]ManagedFile, 0, len(assets))
+		for path, contents := range assets {
+			files = append(files, ManagedFile{Path: path, SHA256: hash(contents)})
+		}
+		manifest.Installations = append(manifest.Installations, Installation{Agent: agent, Scope: options.Scope, Destination: destinationFor(agent), CassorVersion: "0.1.0-dev", InstalledAt: time.Now().UTC().Format(time.RFC3339Nano), Files: files})
+	}
+	return result, writeManifest(ManifestPath(state), manifest)
 }
 
 func Status(repositoryRoot, stateDir string) (Manifest, error) {

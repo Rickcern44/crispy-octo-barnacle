@@ -89,3 +89,43 @@ func TestUpdateAndUninstallPreserveModifiedFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestInstallAllPreflightsConflicts(t *testing.T) {
+	root := t.TempDir()
+	state := filepath.Join(root, ".cassor")
+	if err := os.Mkdir(state, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, ".github", "skills", "cassor"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Install(root, state, InstallOptions{Agent: "all", Scope: "project"}); err == nil {
+		t.Fatal("Install(all) accepted a conflict")
+	}
+	if _, err := os.Stat(filepath.Join(root, ".agents", "skills", "cassor")); !os.IsNotExist(err) {
+		t.Fatalf("all install wrote before conflict: %v", err)
+	}
+}
+
+func TestInstallAllCreatesNativeDestinations(t *testing.T) {
+	root := t.TempDir()
+	state := filepath.Join(root, ".cassor")
+	if err := os.Mkdir(state, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Install(root, state, InstallOptions{Agent: "all", Scope: "project"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{".agents/skills/cassor/SKILL.md", ".claude/skills/cassor/SKILL.md", ".github/skills/cassor/SKILL.md"} {
+		if _, err := os.Stat(filepath.Join(root, path)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	manifest, err := Status(root, state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(manifest.Installations) != 3 {
+		t.Fatalf("installations=%d", len(manifest.Installations))
+	}
+}
