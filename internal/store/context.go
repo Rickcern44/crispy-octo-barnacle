@@ -52,7 +52,7 @@ func itemsByStatus(database *sql.DB, status string) ([]Item, error) {
 }
 
 func plansByStatus(database *sql.DB, status string) ([]Plan, error) {
-	rows, err := database.Query(`SELECT id,roadmap_item_id,revision,content,status,created_at,approved_at FROM plan_revisions WHERE status=? ORDER BY created_at, id`, status)
+	rows, err := database.Query(`SELECT id,roadmap_item_id,revision,content,status,created_at,approved_at,approval_note FROM plan_revisions WHERE status=? ORDER BY created_at, id`, status)
 	if err != nil {
 		return nil, err
 	}

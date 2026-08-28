@@ -89,7 +89,7 @@ func loadData(database *sql.DB, projectName string) (roadmapData, error) {
 	if err != nil {
 		return roadmapData{}, err
 	}
-	rows, err := database.Query(`SELECT p.id,p.roadmap_item_id,p.revision,p.content,p.status,p.created_at,p.approved_at,i.title FROM plan_revisions p JOIN roadmap_items i ON i.id=p.roadmap_item_id ORDER BY p.roadmap_item_id,p.revision`)
+	rows, err := database.Query(`SELECT p.id,p.roadmap_item_id,p.revision,p.content,p.status,p.created_at,p.approved_at,p.approval_note,i.title FROM plan_revisions p JOIN roadmap_items i ON i.id=p.roadmap_item_id ORDER BY p.roadmap_item_id,p.revision`)
 	if err != nil {
 		return roadmapData{}, err
 	}
@@ -97,7 +97,7 @@ func loadData(database *sql.DB, projectName string) (roadmapData, error) {
 	plans := []planView{}
 	for rows.Next() {
 		var view planView
-		if err := rows.Scan(&view.ID, &view.ItemID, &view.Revision, &view.Content, &view.Status, &view.CreatedAt, &view.ApprovedAt, &view.ItemTitle); err != nil {
+		if err := rows.Scan(&view.ID, &view.ItemID, &view.Revision, &view.Content, &view.Status, &view.CreatedAt, &view.ApprovedAt, &view.ApprovalNote, &view.ItemTitle); err != nil {
 			return roadmapData{}, err
 		}
 		plans = append(plans, view)

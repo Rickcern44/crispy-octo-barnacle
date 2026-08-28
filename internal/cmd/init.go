@@ -39,6 +39,9 @@ func newInitCommand() *cobra.Command {
 		if err := config.Write(config.Path(stateDir), config.Config{Name: name}); err != nil {
 			return fmt.Errorf("write configuration: %w", err)
 		}
+		if err := config.WriteDefaultAgents(config.AgentsPath(stateDir)); err != nil {
+			return fmt.Errorf("write agent configuration: %w", err)
+		}
 		if err := store.Initialize(filepath.Join(stateDir, store.DatabaseFileName)); err != nil {
 			return err
 		}

@@ -302,7 +302,7 @@ func planCommand() *cobra.Command {
 		_, err = fmt.Fprintf(command.OutOrStdout(), "Plan %d approved\n", value)
 		return err
 	}}
-	command.AddCommand(create, show, revise, approve)
+	command.AddCommand(create, show, revise, approve, recordPlanCommand())
 	return command
 }
 

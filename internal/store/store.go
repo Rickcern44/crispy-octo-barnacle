@@ -45,6 +45,16 @@ func Initialize(path string) error {
 	return nil
 }
 
+// Migrate applies newly embedded schema migrations to an existing database.
+func Migrate(path string) error {
+	database, err := Open(path)
+	if err != nil {
+		return fmt.Errorf("open database: %w", err)
+	}
+	defer database.Close()
+	return applyMigrations(database)
+}
+
 func applyMigrations(database *sql.DB) error {
 	if _, err := database.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TEXT NOT NULL)`); err != nil {
 		return fmt.Errorf("create migration metadata: %w", err)

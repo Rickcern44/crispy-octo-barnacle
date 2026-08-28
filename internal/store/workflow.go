@@ -23,13 +23,14 @@ type Item struct {
 	UpdatedAt   string `json:"updated_at"`
 }
 type Plan struct {
-	ID         int64   `json:"id"`
-	ItemID     int64   `json:"item_id"`
-	Revision   int     `json:"revision"`
-	Content    string  `json:"content"`
-	Status     string  `json:"status"`
-	CreatedAt  string  `json:"created_at"`
-	ApprovedAt *string `json:"approved_at,omitempty"`
+	ID           int64   `json:"id"`
+	ItemID       int64   `json:"item_id"`
+	Revision     int     `json:"revision"`
+	Content      string  `json:"content"`
+	Status       string  `json:"status"`
+	CreatedAt    string  `json:"created_at"`
+	ApprovedAt   *string `json:"approved_at,omitempty"`
+	ApprovalNote string  `json:"approval_note,omitempty"`
 }
 type Task struct {
 	ID          int64   `json:"id"`
@@ -173,11 +174,11 @@ func SetItemStatus(database *sql.DB, id int64, status string) error {
 
 func scanPlan(scanner interface{ Scan(...any) error }) (Plan, error) {
 	var value Plan
-	err := scanner.Scan(&value.ID, &value.ItemID, &value.Revision, &value.Content, &value.Status, &value.CreatedAt, &value.ApprovedAt)
+	err := scanner.Scan(&value.ID, &value.ItemID, &value.Revision, &value.Content, &value.Status, &value.CreatedAt, &value.ApprovedAt, &value.ApprovalNote)
 	return value, err
 }
 func GetPlan(database *sql.DB, id int64) (Plan, error) {
-	value, err := scanPlan(database.QueryRow(`SELECT id,roadmap_item_id,revision,content,status,created_at,approved_at FROM plan_revisions WHERE id=?`, id))
+	value, err := scanPlan(database.QueryRow(`SELECT id,roadmap_item_id,revision,content,status,created_at,approved_at,approval_note FROM plan_revisions WHERE id=?`, id))
 	if err == sql.ErrNoRows {
 		return value, fmt.Errorf("plan %d not found", id)
 	}
@@ -251,7 +252,7 @@ func ApprovePlan(database *sql.DB, id int64) error {
 	return transaction.Commit()
 }
 func ListPlans(database *sql.DB, itemID int64) ([]Plan, error) {
-	rows, err := database.Query(`SELECT id,roadmap_item_id,revision,content,status,created_at,approved_at FROM plan_revisions WHERE roadmap_item_id=? ORDER BY revision`, itemID)
+	rows, err := database.Query(`SELECT id,roadmap_item_id,revision,content,status,created_at,approved_at,approval_note FROM plan_revisions WHERE roadmap_item_id=? ORDER BY revision`, itemID)
 	if err != nil {
 		return nil, err
 	}

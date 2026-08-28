@@ -1,0 +1,52 @@
+package cmd
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"os"
+
+	"github.com/spf13/cobra"
+
+	"github.com/rickcern44/cassor/internal/store"
+)
+
+func recordPlanCommand() *cobra.Command {
+	var path, approvalNote string
+	var approve, approvedByUser, asJSON bool
+	command := &cobra.Command{Use: "record", Short: "Atomically record an approved plan packet", RunE: func(command *cobra.Command, _ []string) error {
+		if !approve || !approvedByUser {
+			return fmt.Errorf("recording a plan requires both --approve and --approved-by-user")
+		}
+		contents, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("read plan packet: %w", err)
+		}
+		var packet store.PlanPacket
+		decoder := json.NewDecoder(bytes.NewReader(contents))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&packet); err != nil {
+			return fmt.Errorf("decode plan packet: %w", err)
+		}
+		if decoder.More() {
+			return fmt.Errorf("plan packet must contain one JSON value")
+		}
+		database, err := databaseForCommand()
+		if err != nil {
+			return err
+		}
+		defer database.Close()
+		recorded, err := store.RecordApprovedPlan(database, packet, approvalNote)
+		if err != nil {
+			return err
+		}
+		return output(command, recorded, asJSON)
+	}}
+	command.Flags().StringVar(&path, "file", "", "path to a plan-packet JSON file")
+	command.Flags().BoolVar(&approve, "approve", false, "record this approved plan revision")
+	command.Flags().BoolVar(&approvedByUser, "approved-by-user", false, "confirm explicit user approval")
+	command.Flags().StringVar(&approvalNote, "approval-note", "", "optional user approval note")
+	command.Flags().BoolVar(&asJSON, "json", false, "emit JSON")
+	_ = command.MarkFlagRequired("file")
+	return command
+}
