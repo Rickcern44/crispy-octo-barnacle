@@ -132,7 +132,37 @@ func itemCommand() *cobra.Command {
 	update := updateItemCommand()
 	ready := itemTransitionCommand("ready", "Ready")
 	cancel := itemTransitionCommand("cancel", "Won’t Do")
-	command.AddCommand(add, list, show, update, ready, cancel)
+	command.AddCommand(add, list, show, update, itemMetadataCommand(), ready, cancel)
+	return command
+}
+func itemMetadataCommand() *cobra.Command {
+	var targetDate, priority, complexity, team, lead, summary, specs, links string
+	var progress int
+	command := &cobra.Command{Use: "metadata ID", Args: cobra.ExactArgs(1), RunE: func(command *cobra.Command, args []string) error {
+		value, err := id(args[0])
+		if err != nil {
+			return err
+		}
+		database, err := databaseForCommand()
+		if err != nil {
+			return err
+		}
+		defer database.Close()
+		item, err := store.UpdateItemMetadata(database, value, targetDate, progress, priority, complexity, team, lead, summary, specs, links)
+		if err != nil {
+			return err
+		}
+		return output(command, item, false)
+	}}
+	command.Flags().StringVar(&targetDate, "target-date", "", "YYYY-MM-DD target date")
+	command.Flags().IntVar(&progress, "progress", 0, "completion percent")
+	command.Flags().StringVar(&priority, "priority", "Medium", "High, Medium, or Low")
+	command.Flags().StringVar(&complexity, "complexity", "Medium", "High, Medium, or Low")
+	command.Flags().StringVar(&team, "team", "", "owning team")
+	command.Flags().StringVar(&lead, "lead", "", "lead engineer")
+	command.Flags().StringVar(&summary, "technical-summary", "", "technical summary")
+	command.Flags().StringVar(&specs, "specifications", "[]", "JSON checklist")
+	command.Flags().StringVar(&links, "documentation-links", "[]", "JSON documentation links")
 	return command
 }
 func showItemCommand() *cobra.Command {

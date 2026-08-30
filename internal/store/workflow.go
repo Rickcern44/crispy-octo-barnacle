@@ -12,15 +12,24 @@ type Category struct {
 	CreatedAt string `json:"created_at"`
 }
 type Item struct {
-	ID          int64  `json:"id"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Category    string `json:"category"`
-	Horizon     string `json:"horizon"`
-	Status      string `json:"status"`
-	Rationale   string `json:"rationale"`
-	CreatedAt   string `json:"created_at"`
-	UpdatedAt   string `json:"updated_at"`
+	ID                 int64  `json:"id"`
+	Title              string `json:"title"`
+	Description        string `json:"description"`
+	Category           string `json:"category"`
+	Horizon            string `json:"horizon"`
+	Status             string `json:"status"`
+	Rationale          string `json:"rationale"`
+	CreatedAt          string `json:"created_at"`
+	UpdatedAt          string `json:"updated_at"`
+	TargetDate         string `json:"target_date"`
+	Progress           int    `json:"progress"`
+	Priority           string `json:"priority"`
+	Complexity         string `json:"complexity"`
+	Team               string `json:"team"`
+	LeadEngineer       string `json:"lead_engineer"`
+	TechnicalSummary   string `json:"technical_summary"`
+	Specifications     string `json:"specifications"`
+	DocumentationLinks string `json:"documentation_links"`
 }
 type Plan struct {
 	ID           int64   `json:"id"`
@@ -101,11 +110,19 @@ func AddItem(database *sql.DB, title, description, category, horizon, rationale 
 }
 func scanItem(scanner interface{ Scan(...any) error }) (Item, error) {
 	var value Item
-	err := scanner.Scan(&value.ID, &value.Title, &value.Description, &value.Category, &value.Horizon, &value.Status, &value.Rationale, &value.CreatedAt, &value.UpdatedAt)
+	err := scanner.Scan(&value.ID, &value.Title, &value.Description, &value.Category, &value.Horizon, &value.Status, &value.Rationale, &value.CreatedAt, &value.UpdatedAt, &value.TargetDate, &value.Progress, &value.Priority, &value.Complexity, &value.Team, &value.LeadEngineer, &value.TechnicalSummary, &value.Specifications, &value.DocumentationLinks)
 	return value, err
 }
 
-const itemColumns = `i.id, i.title, i.description, c.name, i.horizon, i.status, i.rationale, i.created_at, i.updated_at FROM roadmap_items i JOIN categories c ON c.id=i.category_id`
+const itemColumns = `i.id, i.title, i.description, c.name, i.horizon, i.status, i.rationale, i.created_at, i.updated_at, i.target_date, i.progress, i.priority, i.complexity, i.team, i.lead_engineer, i.technical_summary, i.specifications, i.documentation_links FROM roadmap_items i JOIN categories c ON c.id=i.category_id`
+
+func UpdateItemMetadata(database *sql.DB, id int64, targetDate string, progress int, priority, complexity, team, lead, summary, specs, links string) (Item, error) {
+	_, err := database.Exec(`UPDATE roadmap_items SET target_date=?,progress=?,priority=?,complexity=?,team=?,lead_engineer=?,technical_summary=?,specifications=?,documentation_links=?,updated_at=? WHERE id=?`, targetDate, progress, priority, complexity, team, lead, summary, specs, links, now(), id)
+	if err != nil {
+		return Item{}, err
+	}
+	return GetItem(database, id)
+}
 
 func GetItem(database *sql.DB, id int64) (Item, error) {
 	value, err := scanItem(database.QueryRow(`SELECT `+itemColumns+` WHERE i.id=?`, id))
