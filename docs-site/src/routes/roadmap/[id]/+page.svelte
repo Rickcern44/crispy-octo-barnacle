@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import { page } from '$app/state';
-	import { plansForItem, reportsForItem, roadmap } from '$lib/roadmap';
+	import { lifecycleForItem, plansForItem, reportsForItem, roadmap } from '$lib/roadmap';
 
 	const itemID = Number((page.params.id ?? '').replace('rm-', ''));
 	const item = roadmap.items.find((candidate) => candidate.id === itemID);
 	const plans = plansForItem(itemID);
 	const reports = reportsForItem(itemID);
+	const lifecycle = lifecycleForItem(itemID);
 </script>
 
 <svelte:head><title>{item ? `RM-${item.id} · ${item.title}` : 'Roadmap item'}</title></svelte:head>
@@ -42,5 +43,6 @@
 		{#if reports.length > 0}
 			<section class="mt-9"><h2 class="text-2xl font-bold text-white">Orchestration reports</h2><div class="mt-5 space-y-4">{#each reports as report}<article class="rounded-xl border border-slate-800 bg-slate-900/70 p-5"><div class="flex flex-wrap justify-between gap-2"><h3 class="font-semibold text-white">{report.execution_mode} run</h3><span class="text-sm text-slate-400">{new Date(report.created_at).toLocaleDateString()}</span></div><p class="mt-2 text-sm text-slate-300">Roles: {report.roles.join(', ') || 'none'} · {Math.round(report.elapsed_ns / 1_000_000_000)}s · {report.tool_calls} tool calls · {report.verification}</p><p class="mt-2 text-sm text-slate-400">Tokens: {report.total_tokens ?? 'unavailable'}</p></article>{/each}</div></section>
 		{/if}
+		<section class="mt-9"><h2 class="text-2xl font-bold text-white">SDD-lite lifecycle</h2><div class="mt-4 flex flex-wrap gap-2">{#each ['Intake', 'Explore', 'Define', 'Plan', 'Implement', 'Verify', 'Record'] as phase}<span class={`rounded-full px-3 py-1 text-sm ${lifecycle.phases.some((record) => record.phase === phase) ? 'bg-cyan-400 text-slate-950' : 'bg-slate-800 text-slate-400'}`}>{phase}</span>{/each}</div>{#if lifecycle.criteria.length > 0}<h3 class="mt-6 font-semibold text-white">Acceptance criteria</h3><ul class="mt-3 space-y-2">{#each lifecycle.criteria as criterion}<li class="rounded-lg border border-slate-800 bg-slate-900/70 p-3"><span class="font-medium text-white">{criterion.Title}</span><span class="ml-2 text-sm text-cyan-300">{criterion.Status}</span>{#if criterion.Evidence}<p class="mt-1 text-sm text-slate-400">{criterion.Evidence}</p>{/if}</li>{/each}</ul>{/if}</section>
 	{:else}<p class="mt-8 text-slate-300">This roadmap item does not exist.</p>{/if}
 </main>

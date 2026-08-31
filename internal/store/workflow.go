@@ -187,6 +187,15 @@ func TransitionItemStatus(database *sql.DB, id int64, status string) error {
 	if !ok {
 		return fmt.Errorf("unsupported roadmap item status %q", status)
 	}
+	if status == "Done" {
+		unresolved, err := UnresolvedAcceptanceCriteria(database, id)
+		if err != nil {
+			return err
+		}
+		if unresolved > 0 {
+			return fmt.Errorf("roadmap item has %d acceptance criteria that have not passed or been waived", unresolved)
+		}
+	}
 	result, err := database.Exec(`UPDATE roadmap_items SET status=?, updated_at=? WHERE id=? AND status=?`, status, now(), id, previous)
 	if err != nil {
 		return err

@@ -49,4 +49,13 @@ export function reportsForItem(itemID: number) {
 	return roadmap.reports.filter((report) => report.item_id === itemID);
 }
 
+export function lifecycleForItem(itemID: number) {
+	return {
+		phases: roadmap.phases.filter((phase) => phase.ItemID === itemID),
+		criteria: roadmap.criteria.filter(
+			(criterion) => criterion.ItemID === itemID,
+		),
+	};
+}
+
 export { roadmap };

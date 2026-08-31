@@ -134,7 +134,7 @@ func itemCommand() *cobra.Command {
 	start := itemTransitionCommand("start", "In Progress")
 	complete := itemTransitionCommand("complete", "Done")
 	cancel := itemTransitionCommand("cancel", "Won’t Do")
-	command.AddCommand(add, list, show, update, itemMetadataCommand(), ready, start, complete, cancel)
+	command.AddCommand(add, list, show, update, itemMetadataCommand(), lifecycleCommand(), ready, start, complete, cancel)
 	return command
 }
 func itemMetadataCommand() *cobra.Command {

@@ -7,11 +7,11 @@ description: Coordinate repository or greenfield software work through focused d
 
 Locate the Cassor project before acting. Run `cassor context --json` to load compact durable state and `cassor check` before relying on that state. When `cassor` is unavailable, use the runtime adapter's documented command fallback.
 
-Follow the conceptual state flow: intake → inspect → clarify → plan-draft → awaiting-approval → implementing → verifying → completed. The Cassor CLI—not prompt text—owns legal persisted-state transitions.
+Follow the SDD-lite lifecycle: Intake → Explore → Define → Plan → Implement → Verify → Record. Define acceptance criteria before planning; Verify records manual or automated evidence, and a feature cannot complete while any criterion is unresolved. The Cassor CLI—not prompt text—owns legal persisted-state transitions.
 
 Inspect discoverable facts before asking questions. Select only the role lenses justified by the request; read the matching role contract before dispatching work. Ask meaningful questions incrementally, including recommendations and material consequences when appropriate. Before presenting a plan, confirm that relevant coverage is answered, safely inferred, or irrelevant.
 
-Present a compact plan packet with no material open questions. Do not mutate repository files or persistent Cassor state until the user explicitly approves the exact plan revision. After approval, record the packet atomically with `cassor plan record --file … --approve --approved-by-user`, then execute approved tasks sequentially. Run relevant verification before marking each task complete.
+Present a compact plan packet with no material open questions. Do not mutate repository files or persistent Cassor state until the user explicitly approves the exact plan revision, except for a user-requested, non-logic, mechanically safe correction with no behavior, API, schema, configuration, workflow, or UI impact. After approval, record the packet atomically with `cassor plan record --file … --approve --approved-by-user`, then execute approved tasks sequentially. Run relevant verification before marking each task complete.
 
 Tactical implementation changes inside the approved behavior are allowed. Stop for an amendment before changing user-visible behavior, scope, architecture, public interfaces, persisted data, dependencies, compatibility, acceptance criteria, migrations, destructive behavior, or delivery outcomes. Repairs that remain inside the approved plan may continue.
 
