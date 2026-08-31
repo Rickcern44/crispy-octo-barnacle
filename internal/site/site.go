@@ -17,15 +17,18 @@ import (
 )
 
 const (
-	sourceDocsDirectory = "docs-site/src/content/docs"
-	relativeOutput      = "docs/roadmap/index.html"
+	sourceDocsDirectory   = "docs-site/src/lib/generated"
+	sourceGuidesDirectory = "docs-site/src/routes/guides"
+	relativeOutput        = "docs/roadmap/index.html"
 )
 
 type roadmapData struct {
-	ProjectName string       `json:"project_name"`
-	Items       []store.Item `json:"items"`
-	Plans       []planView   `json:"plans"`
-	Completed   []store.Task `json:"completed_tasks"`
+	ProjectName string                `json:"project_name"`
+	Items       []store.Item          `json:"items"`
+	Plans       []planView            `json:"plans"`
+	Tasks       []store.Task          `json:"tasks"`
+	Reports     []store.FeatureReport `json:"reports"`
+	Completed   []store.Task          `json:"completed_tasks"`
 }
 
 type planView struct {
@@ -45,40 +48,43 @@ type milestone struct {
 	Kind string
 }
 
-// Build writes deterministic Starlight source files from persisted Cassor state.
+// Build writes deterministic SvelteKit source files from persisted Cassor state.
 func Build(repositoryRoot, stateDir string) (string, error) {
 	data, err := readData(stateDir)
 	if err != nil {
 		return "", err
 	}
-	files, err := renderSources(data, repositoryRoot)
+	encoded, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return "", err
 	}
 	root := filepath.Join(repositoryRoot, sourceDocsDirectory)
-	if err := os.RemoveAll(filepath.Join(root, "roadmap")); err != nil {
-		return "", fmt.Errorf("clear generated roadmap sources: %w", err)
+	if err := os.RemoveAll(root); err != nil {
+		return "", fmt.Errorf("clear generated roadmap data: %w", err)
 	}
-	for relativePath, content := range files {
-		output := filepath.Join(root, relativePath)
-		if err := os.MkdirAll(filepath.Dir(output), 0o755); err != nil {
-			return "", fmt.Errorf("create generated source directory: %w", err)
-		}
-		if err := os.WriteFile(output, content, 0o644); err != nil {
-			return "", fmt.Errorf("write generated source: %w", err)
-		}
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		return "", fmt.Errorf("create generated roadmap data directory: %w", err)
 	}
-	return filepath.Join(root, "index.md"), nil
+	output := filepath.Join(root, "roadmap.json")
+	if err := os.WriteFile(output, append(encoded, '\n'), 0o644); err != nil {
+		return "", fmt.Errorf("write generated roadmap data: %w", err)
+	}
+	if err := writeGuides(repositoryRoot); err != nil {
+		return "", err
+	}
+	return output, nil
 }
 
-// Compile builds the generated Starlight source into a hostable static site.
+// Compile builds the generated SvelteKit source into a hostable static site.
 func Compile(repositoryRoot string) (string, error) {
 	workspace := filepath.Join(repositoryRoot, "docs-site")
 	if _, err := os.Stat(filepath.Join(workspace, "package.json")); err != nil {
 		return "", fmt.Errorf("read documentation workspace: %w", err)
 	}
+	if err := os.RemoveAll(filepath.Join(repositoryRoot, "docs", "roadmap")); err != nil {
+		return "", fmt.Errorf("clear previous documentation output: %w", err)
+	}
 	command := exec.Command("npm", "--prefix", workspace, "run", "build")
-	command.Env = append(os.Environ(), "ASTRO_TELEMETRY_DISABLED=1")
 	if output, err := command.CombinedOutput(); err != nil {
 		return "", fmt.Errorf("build documentation site: %w\n%s", err, output)
 	}
@@ -95,8 +101,33 @@ func Validate(stateDir string) error {
 	if err != nil {
 		return err
 	}
-	_, err = renderSources(data, "")
+	_, err = json.Marshal(data)
 	return err
+}
+
+func writeGuides(repositoryRoot string) error {
+	guidesRoot := filepath.Join(repositoryRoot, sourceGuidesDirectory)
+	if err := os.RemoveAll(guidesRoot); err != nil {
+		return fmt.Errorf("clear generated guide routes: %w", err)
+	}
+	for source, slug := range map[string]string{
+		"CASSOR_CODEX_HANDOFF.md":      "project-handoff",
+		"CASSOR_PLAN_PACKET_SCHEMA.md": "plan-packet-schema",
+		"CASSOR_SKILLS_SPEC.md":        "skills-specification",
+	} {
+		content, err := os.ReadFile(filepath.Join(repositoryRoot, "docs", source))
+		if err != nil {
+			return fmt.Errorf("read %s: %w", source, err)
+		}
+		output := filepath.Join(guidesRoot, slug, "+page.md")
+		if err := os.MkdirAll(filepath.Dir(output), 0o755); err != nil {
+			return fmt.Errorf("create guide route directory: %w", err)
+		}
+		if err := os.WriteFile(output, append([]byte(frontmatter(strings.TrimSuffix(source, ".md"), "Repository reference documentation.")+"\n"), content...), 0o644); err != nil {
+			return fmt.Errorf("write generated guide route: %w", err)
+		}
+	}
+	return nil
 }
 
 func readData(stateDir string) (roadmapData, error) {
@@ -133,6 +164,26 @@ func loadData(database *sql.DB, projectName string) (roadmapData, error) {
 	if err := rows.Err(); err != nil {
 		return roadmapData{}, err
 	}
+	taskRows, err := database.Query(`SELECT id,plan_revision_id,title,description,status,outcome,created_at,started_at,completed_at,blocked_at FROM tasks ORDER BY plan_revision_id,id`)
+	if err != nil {
+		return roadmapData{}, err
+	}
+	defer taskRows.Close()
+	tasks := []store.Task{}
+	for taskRows.Next() {
+		var task store.Task
+		if err := taskRows.Scan(&task.ID, &task.PlanID, &task.Title, &task.Description, &task.Status, &task.Outcome, &task.CreatedAt, &task.StartedAt, &task.CompletedAt, &task.BlockedAt); err != nil {
+			return roadmapData{}, err
+		}
+		tasks = append(tasks, task)
+	}
+	if err := taskRows.Err(); err != nil {
+		return roadmapData{}, err
+	}
+	reports, err := store.ListFeatureReports(database)
+	if err != nil {
+		return roadmapData{}, err
+	}
 	completedRows, err := database.Query(`SELECT id,plan_revision_id,title,description,status,outcome,created_at,started_at,completed_at,blocked_at FROM tasks WHERE status='Done' ORDER BY completed_at DESC,id DESC`)
 	if err != nil {
 		return roadmapData{}, err
@@ -146,7 +197,7 @@ func loadData(database *sql.DB, projectName string) (roadmapData, error) {
 		}
 		completed = append(completed, task)
 	}
-	return roadmapData{ProjectName: projectName, Items: items, Plans: plans, Completed: completed}, completedRows.Err()
+	return roadmapData{ProjectName: projectName, Items: items, Plans: plans, Tasks: tasks, Reports: reports, Completed: completed}, completedRows.Err()
 }
 
 func renderSources(data roadmapData, repositoryRoot string) (map[string][]byte, error) {

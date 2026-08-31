@@ -4,8 +4,7 @@ bin/
 coverage.out
 docs-site/node_modules/
 docs-site/.astro/
-docs-site/src/content/docs/index.md
-docs-site/src/content/docs/roadmap/
-docs-site/src/content/docs/guides/plan-packet-schema.md
-docs-site/src/content/docs/guides/project-handoff.md
-docs-site/src/content/docs/guides/skills-specification.md
+docs-site/.svelte-kit/
+docs-site/src/content/
+docs-site/src/lib/generated/
+docs-site/src/routes/guides/

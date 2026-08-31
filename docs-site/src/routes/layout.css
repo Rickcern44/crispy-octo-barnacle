@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+@theme {
+	--color-cassor-950: #07111f;
+	--color-cassor-900: #0b1a2b;
+	--color-cassor-400: #22d3ee;
+}
+
+body {
+	margin: 0;
+	background: var(--color-cassor-950);
+	color: #e2e8f0;
+	font-family: ui-sans-serif, system-ui, sans-serif;
+}

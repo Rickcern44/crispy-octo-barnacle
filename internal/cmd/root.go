@@ -21,5 +21,6 @@ func NewRootCommand() *cobra.Command {
 	command.AddCommand(newContextCommand(), newSiteCommand())
 	command.AddCommand(newCheckCommand())
 	command.AddCommand(newSkillsCommand())
+	command.AddCommand(newRunReportCommand())
 	return command
 }

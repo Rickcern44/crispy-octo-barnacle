@@ -67,6 +67,12 @@ SQLite is authoritative. Agents retrieve a bounded view through `cassor context 
 
 Persistent state should contain decisions, approved outcomes, task status, verification evidence, and accepted roadmap entries. It should not contain full chain-of-thought, chat transcripts, or duplicate specifications.
 
+### 3.6 Efficiency measurement
+
+Cassor can render an ephemeral run report with `cassor run-report`. The report records caller-supplied execution mode, roles, elapsed time, tool-call count, verification result, and token metrics only when the runtime exposes them. Missing token values are explicitly unavailable, never estimated or treated as zero. Reports are not persisted in SQLite.
+
+Evaluate orchestration with repeatable A/B runs from comparable repository state: a single-agent baseline and an adaptive worker configuration. Compare acceptance-criterion pass rate first, then elapsed time, tool calls, review churn, and API-reported input, cached input, output, reasoning, and total tokens where available. Runtime-hosted sessions without usage telemetry can still be compared on quality and elapsed work, but must not claim a token saving.
+
 ## 4. Canonical package layout
 
 The Cassor source repository should contain:
@@ -655,4 +661,3 @@ These should be resolved when the skills milestone begins:
 - Claude Code subagents: https://docs.anthropic.com/en/docs/claude-code/sub-agents
 - GitHub Copilot agent skills: https://docs.github.com/en/copilot/concepts/agents/about-agent-skills
 - GitHub Copilot customization locations: https://docs.github.com/en/copilot/reference/customization-cheat-sheet
-

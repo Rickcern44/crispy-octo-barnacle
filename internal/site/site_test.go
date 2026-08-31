@@ -36,7 +36,18 @@ func TestBuildGeneratesDeterministicFeatureRoutes(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer database.Close()
-	if _, err := store.AddItem(database, "Document static routes", "Publish feature detail pages.", "Needed", "Now", ""); err != nil {
+	item, err := store.AddItem(database, "Document static routes", "Publish feature detail pages.", "Needed", "Now", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.TransitionItemStatus(database, item.ID, "Ready"); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := store.CreatePlan(database, item.ID, "static route implementation")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.AddTask(database, plan.ID, "Generate task history", "Expose this task in static data."); err != nil {
 		t.Fatal(err)
 	}
 	first, err := Build(root, state)
@@ -58,14 +69,17 @@ func TestBuildGeneratesDeterministicFeatureRoutes(t *testing.T) {
 	if string(initial) != string(repeated) {
 		t.Fatal("Build() output changed without state changes")
 	}
-	if !strings.Contains(string(initial), "/roadmap/rm-1/") {
-		t.Fatal("roadmap does not link to generated feature detail route")
+	if !strings.Contains(string(initial), "Document static routes") {
+		t.Fatal("roadmap data does not include item title")
 	}
-	feature, err := os.ReadFile(filepath.Join(root, sourceDocsDirectory, "roadmap", "rm-1.md"))
+	if !strings.Contains(string(initial), "Generate task history") {
+		t.Fatal("roadmap data does not include feature task history")
+	}
+	guide, err := os.ReadFile(filepath.Join(root, sourceGuidesDirectory, "project-handoff", "+page.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(feature), "Document static routes") {
-		t.Fatal("feature detail source does not include item title")
+	if !strings.Contains(string(guide), "CASSOR_CODEX_HANDOFF.md") {
+		t.Fatal("generated guide route does not include source documentation")
 	}
 }

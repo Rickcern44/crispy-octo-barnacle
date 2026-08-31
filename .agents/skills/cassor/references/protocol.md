@@ -12,6 +12,12 @@ Before dispatch, the orchestrator detects available Codex worker capabilities. I
 
 Aggregate only compact structured findings. The final handoff reports dispatched roles, execution mode, elapsed time when available, and runtime-exposed token usage; none of this telemetry is persisted.
 
+## Efficiency reporting
+
+Use `cassor run-report` to render a compact, non-persistent record of metrics that the runtime actually exposes. Record execution mode, dispatched roles, elapsed time, observed tool calls, and verification result. Supply token flags only when the runtime returns those metrics. Missing values are reported as unavailable; never estimate them or treat an unavailable value as zero.
+
+To evaluate adaptive orchestration, run a representative task twice from comparable repository state: once with a single agent and once with the chosen worker configuration. Compare acceptance-criterion pass rate first, then elapsed time, tool calls, review churn, and runtime-reported token usage when available. Do not persist raw transcripts, hidden reasoning, or run telemetry in Cassor state.
+
 ## Discovery and planning
 
 Inspect repository facts before questions. Use only relevant lenses: repository, requirements, technical, risk, product, or greenfield domain. Classify findings as required, recommended, or future opportunity. Recommendations and future opportunities require explicit user approval before entering durable roadmap state.

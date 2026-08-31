@@ -1,0 +1,46 @@
+<script lang="ts">
+	import { base } from '$app/paths';
+	import { page } from '$app/state';
+	import { plansForItem, reportsForItem, roadmap } from '$lib/roadmap';
+
+	const itemID = Number((page.params.id ?? '').replace('rm-', ''));
+	const item = roadmap.items.find((candidate) => candidate.id === itemID);
+	const plans = plansForItem(itemID);
+	const reports = reportsForItem(itemID);
+</script>
+
+<svelte:head><title>{item ? `RM-${item.id} · ${item.title}` : 'Roadmap item'}</title></svelte:head>
+
+<main class="mx-auto max-w-4xl px-5 py-12 sm:px-8 lg:py-20">
+	<a class="text-sm font-semibold text-cyan-300 hover:text-cyan-200" href={`${base}/`}>← Back to roadmap</a>
+	{#if item}
+		<header class="mt-8 border-b border-slate-800 pb-8"><p class="text-sm font-semibold tracking-[0.18em] text-cyan-400">RM-{item.id} · {item.status}</p><h1 class="mt-3 text-4xl font-bold tracking-tight text-white sm:text-5xl">{item.title}</h1><p class="mt-5 text-lg leading-8 text-slate-300">{item.technical_summary || item.description || item.rationale}</p></header>
+		<section class="mt-9 grid gap-4 sm:grid-cols-2"><div class="rounded-xl border border-slate-800 bg-slate-900/70 p-5"><p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Delivery</p><dl class="mt-3 space-y-2 text-sm"><div class="flex justify-between gap-3"><dt class="text-slate-400">Progress</dt><dd>{item.progress}%</dd></div><div class="flex justify-between gap-3"><dt class="text-slate-400">Target</dt><dd>{item.target_date || 'Unscheduled'}</dd></div><div class="flex justify-between gap-3"><dt class="text-slate-400">Horizon</dt><dd>{item.horizon}</dd></div></dl></div><div class="rounded-xl border border-slate-800 bg-slate-900/70 p-5"><p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Ownership</p><dl class="mt-3 space-y-2 text-sm"><div class="flex justify-between gap-3"><dt class="text-slate-400">Team</dt><dd>{item.team || 'Unassigned'}</dd></div><div class="flex justify-between gap-3"><dt class="text-slate-400">Lead</dt><dd>{item.lead_engineer || 'Unassigned'}</dd></div><div class="flex justify-between gap-3"><dt class="text-slate-400">Priority</dt><dd>{item.priority || 'Unassigned'}</dd></div></dl></div></section>
+		{#if item.specifications}<section class="mt-9"><h2 class="text-2xl font-bold text-white">Technical specifications</h2><pre class="mt-4 overflow-x-auto rounded-xl border border-slate-800 bg-slate-900 p-5 text-sm text-slate-300">{item.specifications}</pre></section>{/if}
+		{#if plans.length > 0}
+			<section class="mt-9">
+				<h2 class="text-2xl font-bold text-white">Implementation history</h2>
+				<p class="mt-2 text-slate-400">Approved plan tasks and their recorded outcomes.</p>
+				<div class="mt-5 space-y-5">
+					{#each plans as plan}
+						<div class="rounded-xl border border-slate-800 bg-slate-900/70 p-5">
+							<p class="text-xs font-semibold uppercase tracking-wider text-cyan-300">Plan revision {plan.revision} · {plan.status}</p>
+							<ul class="mt-4 space-y-4">
+								{#each plan.tasks as task}
+									<li class="border-l-2 border-slate-700 pl-4">
+										<div class="flex flex-wrap items-center gap-x-3 gap-y-1"><h3 class="font-semibold text-white">{task.title}</h3><span class="text-xs font-medium uppercase tracking-wider text-slate-400">{task.status}</span>{#if task.completed_at}<span class="text-xs text-emerald-300">Completed {task.completed_at.slice(0, 10)}</span>{/if}</div>
+										{#if task.description}<p class="mt-1 text-sm text-slate-300">{task.description}</p>{/if}
+										{#if task.outcome}<p class="mt-2 text-sm text-slate-400">{task.outcome}</p>{/if}
+									</li>
+								{/each}
+							</ul>
+						</div>
+					{/each}
+				</div>
+			</section>
+		{/if}
+		{#if reports.length > 0}
+			<section class="mt-9"><h2 class="text-2xl font-bold text-white">Orchestration reports</h2><div class="mt-5 space-y-4">{#each reports as report}<article class="rounded-xl border border-slate-800 bg-slate-900/70 p-5"><div class="flex flex-wrap justify-between gap-2"><h3 class="font-semibold text-white">{report.execution_mode} run</h3><span class="text-sm text-slate-400">{new Date(report.created_at).toLocaleDateString()}</span></div><p class="mt-2 text-sm text-slate-300">Roles: {report.roles.join(', ') || 'none'} · {Math.round(report.elapsed_ns / 1_000_000_000)}s · {report.tool_calls} tool calls · {report.verification}</p><p class="mt-2 text-sm text-slate-400">Tokens: {report.total_tokens ?? 'unavailable'}</p></article>{/each}</div></section>
+		{/if}
+	{:else}<p class="mt-8 text-slate-300">This roadmap item does not exist.</p>{/if}
+</main>
