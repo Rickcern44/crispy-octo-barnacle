@@ -225,7 +225,10 @@ func Update(repositoryRoot, stateDir, agent, scope string) (LifecycleResult, err
 	result := LifecycleResult{Agent: agent, Scope: scope}
 	for _, file := range installation.Files {
 		contents, err := os.ReadFile(filepath.Join(destination, file.Path))
-		if err != nil || hash(contents) != file.SHA256 {
+		// A project skill may already match the new embedded asset when Cassor
+		// itself is being developed. Accept that known target and refresh the
+		// manifest, while continuing to protect unrelated local edits.
+		if err != nil || (hash(contents) != file.SHA256 && hash(contents) != hash(assets[file.Path])) {
 			return result, fmt.Errorf("managed skill file has changed or is missing: %s", filepath.Join(destination, file.Path))
 		}
 	}
@@ -355,7 +358,7 @@ func verifyManagedFile(destination string, installation Installation, path strin
 				return fmt.Errorf("managed skill file has changed or is missing: %s", filepath.Join(destination, path))
 			}
 			if hash(contents) != hash(expected) {
-				return fmt.Errorf("installed skill is stale: %s", filepath.Join(destination, path))
+				return fmt.Errorf("Cassor skill update available: %s; run cassor skills update", filepath.Join(destination, path))
 			}
 			return nil
 		}

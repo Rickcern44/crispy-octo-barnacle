@@ -6,6 +6,12 @@ The orchestrator is the only role that interacts with the user. It selects propo
 
 Workers never ask the user questions, approve work, expand scope, persist speculative roadmap items, or mutate Cassor state outside their assigned authority. Do not persist worker transcripts or chain-of-thought.
 
+## Adaptive Codex dispatch
+
+Before dispatch, the orchestrator detects available Codex worker capabilities. It dispatches only independent, bounded work that benefits from specialization or parallelism; otherwise it runs the relevant role contracts sequentially. A worker receives only the task, relevant state, role contract, repository boundary, and explicit write authority. Implementation writes require an approved plan; discovery and verification remain read-only.
+
+Aggregate only compact structured findings. The final handoff reports dispatched roles, execution mode, elapsed time when available, and runtime-exposed token usage; none of this telemetry is persisted.
+
 ## Discovery and planning
 
 Inspect repository facts before questions. Use only relevant lenses: repository, requirements, technical, risk, product, or greenfield domain. Classify findings as required, recommended, or future opportunity. Recommendations and future opportunities require explicit user approval before entering durable roadmap state.
