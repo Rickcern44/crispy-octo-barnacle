@@ -1,20 +1,25 @@
-// Package site renders Cassor's portable static roadmap projection.
+// Package site renders Cassor's static developer documentation source.
 package site
 
 import (
-	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/rickcern44/cassor/internal/config"
 	"github.com/rickcern44/cassor/internal/store"
 )
 
-const relativeOutput = "docs/roadmap/index.html"
+const (
+	sourceDocsDirectory = "docs-site/src/content/docs"
+	relativeOutput      = "docs/roadmap/index.html"
+)
 
 type roadmapData struct {
 	ProjectName string       `json:"project_name"`
@@ -22,66 +27,89 @@ type roadmapData struct {
 	Plans       []planView   `json:"plans"`
 	Completed   []store.Task `json:"completed_tasks"`
 }
+
 type planView struct {
 	store.Plan
 	ItemTitle string `json:"item_title"`
 }
 
-// Build writes the deterministic, standalone roadmap page below repositoryRoot.
+type specification struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Done        bool   `json:"done"`
+}
+
+type milestone struct {
+	Item store.Item
+	Date string
+	Kind string
+}
+
+// Build writes deterministic Starlight source files from persisted Cassor state.
 func Build(repositoryRoot, stateDir string) (string, error) {
-	projectConfig, err := config.Read(config.Path(stateDir))
-	if err != nil {
-		return "", fmt.Errorf("read configuration: %w", err)
-	}
-	database, err := store.Open(filepath.Join(stateDir, store.DatabaseFileName))
+	data, err := readData(stateDir)
 	if err != nil {
 		return "", err
 	}
-	defer database.Close()
-	data, err := loadData(database, projectConfig.Name)
+	files, err := renderSources(data, repositoryRoot)
 	if err != nil {
 		return "", err
 	}
-	encoded, err := json.Marshal(data)
-	if err != nil {
-		return "", fmt.Errorf("encode roadmap data: %w", err)
+	root := filepath.Join(repositoryRoot, sourceDocsDirectory)
+	if err := os.RemoveAll(filepath.Join(root, "roadmap")); err != nil {
+		return "", fmt.Errorf("clear generated roadmap sources: %w", err)
 	}
-	page, err := render(template.JS(encoded))
-	if err != nil {
-		return "", err
+	for relativePath, content := range files {
+		output := filepath.Join(root, relativePath)
+		if err := os.MkdirAll(filepath.Dir(output), 0o755); err != nil {
+			return "", fmt.Errorf("create generated source directory: %w", err)
+		}
+		if err := os.WriteFile(output, content, 0o644); err != nil {
+			return "", fmt.Errorf("write generated source: %w", err)
+		}
+	}
+	return filepath.Join(root, "index.md"), nil
+}
+
+// Compile builds the generated Starlight source into a hostable static site.
+func Compile(repositoryRoot string) (string, error) {
+	workspace := filepath.Join(repositoryRoot, "docs-site")
+	if _, err := os.Stat(filepath.Join(workspace, "package.json")); err != nil {
+		return "", fmt.Errorf("read documentation workspace: %w", err)
+	}
+	command := exec.Command("npm", "--prefix", workspace, "run", "build")
+	command.Env = append(os.Environ(), "ASTRO_TELEMETRY_DISABLED=1")
+	if output, err := command.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("build documentation site: %w\n%s", err, output)
 	}
 	output := filepath.Join(repositoryRoot, relativeOutput)
-	if err := os.MkdirAll(filepath.Dir(output), 0o755); err != nil {
-		return "", fmt.Errorf("create roadmap directory: %w", err)
-	}
-	if err := os.WriteFile(output, page, 0o644); err != nil {
-		return "", fmt.Errorf("write roadmap: %w", err)
+	if _, err := os.Stat(output); err != nil {
+		return "", fmt.Errorf("read generated documentation site: %w", err)
 	}
 	return output, nil
 }
 
-// Validate verifies that the current state can be serialized and rendered
-// without changing the generated roadmap projection.
+// Validate verifies that the current state can be rendered without writing files.
 func Validate(stateDir string) error {
+	data, err := readData(stateDir)
+	if err != nil {
+		return err
+	}
+	_, err = renderSources(data, "")
+	return err
+}
+
+func readData(stateDir string) (roadmapData, error) {
 	projectConfig, err := config.Read(config.Path(stateDir))
 	if err != nil {
-		return fmt.Errorf("read configuration: %w", err)
+		return roadmapData{}, fmt.Errorf("read configuration: %w", err)
 	}
 	database, err := store.Open(filepath.Join(stateDir, store.DatabaseFileName))
 	if err != nil {
-		return err
+		return roadmapData{}, err
 	}
 	defer database.Close()
-	data, err := loadData(database, projectConfig.Name)
-	if err != nil {
-		return err
-	}
-	encoded, err := json.Marshal(data)
-	if err != nil {
-		return fmt.Errorf("encode roadmap data: %w", err)
-	}
-	_, err = render(template.JS(encoded))
-	return err
+	return loadData(database, projectConfig.Name)
 }
 
 func loadData(database *sql.DB, projectName string) (roadmapData, error) {
@@ -121,23 +149,165 @@ func loadData(database *sql.DB, projectName string) (roadmapData, error) {
 	return roadmapData{ProjectName: projectName, Items: items, Plans: plans, Completed: completed}, completedRows.Err()
 }
 
-func render(data template.JS) ([]byte, error) {
-	var output bytes.Buffer
-	if err := featureTemplate.Execute(&output, struct{ Data template.JS }{data}); err != nil {
-		return nil, fmt.Errorf("render roadmap: %w", err)
+func renderSources(data roadmapData, repositoryRoot string) (map[string][]byte, error) {
+	files := map[string][]byte{"index.md": []byte(roadmapPage(data))}
+	for _, item := range data.Items {
+		files[filepath.Join("roadmap", fmt.Sprintf("rm-%d.md", item.ID))] = []byte(featurePage(item))
 	}
-	return output.Bytes(), nil
+	if repositoryRoot != "" {
+		for source, target := range map[string]string{
+			"CASSOR_CODEX_HANDOFF.md":      "guides/project-handoff.md",
+			"CASSOR_PLAN_PACKET_SCHEMA.md": "guides/plan-packet-schema.md",
+			"CASSOR_SKILLS_SPEC.md":        "guides/skills-specification.md",
+		} {
+			content, err := os.ReadFile(filepath.Join(repositoryRoot, "docs", source))
+			if err != nil {
+				return nil, fmt.Errorf("read %s: %w", source, err)
+			}
+			files[target] = []byte(frontmatter(strings.TrimSuffix(source, ".md"), "Repository reference documentation.") + "\n" + string(content))
+		}
+	}
+	return files, nil
 }
 
-var featureTemplate = template.Must(template.New("feature").Parse(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cassor feature detail</title><style>:root{--bg:#fff;--panel:#f4f4f4;--line:#e0e0e0;--ink:#161616;--muted:#525252;--blue:#0f62fe;--green:#198038}*{box-sizing:border-box}body{margin:0;font:14px Arial,sans-serif;color:var(--ink);background:var(--bg)}nav{position:fixed;width:220px;height:100vh;background:var(--panel);border-right:1px solid var(--line);padding:24px}main{margin-left:220px;max-width:1180px;padding:34px}h1{font-size:30px;margin:8px 0}.crumb,.muted{color:var(--muted)}.status{background:#d0e2ff;color:#001d6c;padding:6px 10px;font-weight:bold}.bar{height:8px;background:#e0e0e0}.bar i{display:block;height:100%;background:var(--blue)}.grid{display:grid;grid-template-columns:2fr 1fr;gap:24px;margin-top:26px}.card{border:1px solid var(--line);padding:20px;margin-bottom:20px}.summary{border-left:4px solid var(--blue);background:var(--panel)}.spec{padding:14px 0;border-top:1px solid var(--line)}.done{color:var(--green)}.meta dt{color:var(--muted);font-size:12px;margin-top:15px}.meta dd{margin:4px 0;font-weight:bold}@media(max-width:800px){nav{display:none}main{margin:0;padding:20px}.grid{grid-template-columns:1fr}}</style></head><body><nav><h2>Cassor</h2><p class="muted">Developer Roadmap</p><hr><p>▣ Roadmap</p><p>☷ Feature Backlog</p><p>▤ Docs</p></nav><main><p class="crumb">Roadmap / Engineering / Feature detail</p><div id="app"></div></main><script>const data={{.Data}},e=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));let x=data.items.find(i=>i.status==='In Progress')||data.items.find(i=>i.status==='Ready')||data.items[0];let specs=JSON.parse(x.specifications||'[]'),docs=JSON.parse(x.documentation_links||'[]'),done=specs.filter(s=>s.done).length;document.getElementById('app').innerHTML='<div><span class="status">'+e(x.status)+'</span><h1>RM-'+x.id+' · '+e(x.title)+'</h1><p class="muted">'+e(x.description)+'</p><p><b>Overall progress</b> '+x.progress+'%</p><div class="bar"><i style="width:'+x.progress+'%"></i></div></div><section class="grid"><div><div class="card summary"><h2>Technical Summary</h2><p>'+e(x.technical_summary||x.rationale)+'</p></div><div class="card"><h2>Technical Specifications <small class="muted">'+done+' of '+specs.length+' complete</small></h2>'+specs.map(s=>'<div class="spec '+(s.done?'done':'')+'">'+(s.done?'☑':'☐')+' <b>'+e(s.title||s)+'</b><br><span class="muted">'+e(s.description||'')+'</span></div>').join('')+'</div></div><aside><div class="card"><h2>Details</h2><dl class="meta"><dt>Target date</dt><dd>'+e(x.target_date||'—')+'</dd><dt>Assigned team</dt><dd>'+e(x.team||'—')+'</dd><dt>Lead engineer</dt><dd>'+e(x.lead_engineer||'—')+'</dd><dt>Priority / complexity</dt><dd>'+e(x.priority)+' / '+e(x.complexity)+'</dd></dl></div><div class="card"><h2>Related Docs</h2>'+docs.map(d=>'<p>↗ '+e(d)+'</p>').join('')+'</div></aside></section>';</script></body></html>`))
+func roadmapPage(data roadmapData) string {
+	milestones := timelineMilestones(data)
+	var page strings.Builder
+	page.WriteString(frontmatter("Roadmap", "Approved work, delivery progress, and feature details for "+data.ProjectName+"."))
+	page.WriteString(`
+<style>
+.timeline{position:relative;margin:2rem 0}.timeline:before{background:var(--sl-color-gray-4);content:"";left:1rem;position:absolute;top:0;bottom:0;width:2px}.milestone{display:grid;grid-template-columns:2.5rem minmax(0,1fr);gap:1rem;position:relative;margin:1.4rem 0}.dot{background:var(--sl-color-accent);border:4px solid var(--sl-color-bg);border-radius:50%;height:1.15rem;margin:.2rem 0 0 .43rem;width:1.15rem;z-index:1}.milestone.done .dot{background:#2ea043}.milestone.unscheduled .dot{background:var(--sl-color-gray-4)}.card{border:1px solid var(--sl-color-gray-5);border-radius:.65rem;color:inherit;display:block;padding:1rem;text-decoration:none}.card:hover{border-color:var(--sl-color-accent);box-shadow:0 4px 14px #0002}.date{color:var(--sl-color-accent-high);font-size:.8rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase}.meta{color:var(--sl-color-gray-2);font-size:.9rem}.unscheduled{margin-top:2.5rem}@media(min-width:50rem){.timeline:before{left:50%;}.milestone{grid-template-columns:1fr 3rem 1fr}.milestone:nth-child(odd) .card{grid-column:1;text-align:right}.milestone:nth-child(odd) .dot{grid-column:2}.milestone:nth-child(odd) .card{grid-row:1}.milestone:nth-child(even) .dot{grid-column:2}.milestone:nth-child(even) .card{grid-column:3}.dot{margin:.2rem auto}}
+</style>
 
-var carbonTemplate = template.Must(template.New("carbon").Parse(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cassor · Developer Roadmap</title><style>:root{--bg:#161616;--panel:#262626;--line:#393939;--ink:#f4f4f4;--muted:#a8a8a8;--blue:#0f62fe;--green:#42be65;--red:#fa4d56}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px 'IBM Plex Sans',Arial,sans-serif}main{max-width:1440px;margin:auto;padding:28px}header{border-bottom:1px solid var(--line);padding-bottom:20px;display:flex;justify-content:space-between}h1{margin:4px 0;font-size:30px}.eyebrow{color:#78a9ff;font-size:12px;font-weight:bold;letter-spacing:.1em}.stats,.triage{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);margin:20px 0}.stat,.lane{background:var(--panel);padding:14px}.stat b{font-size:28px;color:#78a9ff;display:block}input,select{background:#262626;border:1px solid #525252;color:white;padding:10px;margin-right:8px}.table{width:100%;border-collapse:collapse;margin-top:18px}.table th{text-align:left;background:#393939;padding:10px;color:#c6c6c6;font-size:12px}.table td{padding:12px 10px;border-bottom:1px solid var(--line)}tr{cursor:pointer}tr:hover{background:#222}.tag{padding:3px 8px;background:#393939;border-left:3px solid var(--blue);font-size:12px}.bar{height:6px;background:#393939;width:110px}.bar i{display:block;height:100%;background:var(--green)}#detail{position:fixed;right:0;top:0;height:100%;width:min(480px,100%);background:#262626;border-left:1px solid #525252;padding:24px;overflow:auto;display:none}#detail.open{display:block}.spec{padding:9px 0;border-bottom:1px solid #393939;color:#c6c6c6}@media(max-width:700px){main{padding:16px}.table th:nth-child(4),.table td:nth-child(4),.table th:nth-child(5),.table td:nth-child(5){display:none}}</style></head><body><main><header><div><div class="eyebrow">CASSOR / DEVELOPER ROADMAP</div><h1 id="name"></h1><div style="color:#a8a8a8">Execution visibility for technical delivery.</div></div></header><section class="stats" id="stats"></section><div><input id="q" placeholder="Filter by ID or feature"><select id="status"><option value="">All statuses</option></select></div><table class="table"><thead><tr><th>ID / FEATURE</th><th>STATUS</th><th>PROGRESS</th><th>TARGET</th><th>OWNER</th><th>PRIORITY</th></tr></thead><tbody id="rows"></tbody></table><h2>Lifecycle triage</h2><section class="triage" id="triage"></section></main><aside id="detail"></aside><script>const data={{.Data}},$=x=>document.getElementById(x),e=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const statuses=['Planned','Ready','In Progress','Blocked','Done','Won’t Do'];$('name').textContent=data.project_name;statuses.forEach(s=>$('status').insertAdjacentHTML('beforeend','<option>'+s+'</option>'));function items(){let q=$('q').value.toLowerCase(),s=$('status').value;return data.items.filter(x=>(!s||x.status===s)&&(!q||(x.title+x.id).toLowerCase().includes(q)))}function detail(x){let specs=JSON.parse(x.specifications||'[]'),docs=JSON.parse(x.documentation_links||'[]');$('detail').className='open';$('detail').innerHTML='<button onclick="this.parentElement.className=\'\'">Close</button><div class="eyebrow">RM-'+x.id+'</div><h2>'+e(x.title)+'</h2><p>'+e(x.technical_summary||x.description)+'</p><p><b>Team:</b> '+e(x.team||'Unassigned')+'<br><b>Lead:</b> '+e(x.lead_engineer||'Unassigned')+'<br><b>Complexity:</b> '+e(x.complexity)+'</p><h3>Technical specifications</h3>'+specs.map(s=>'<div class="spec">□ '+e(s)+'</div>').join('')+'<h3>Documentation</h3>'+docs.map(d=>'<div class="spec">'+e(d)+'</div>').join('')}function render(){let a=items();$('stats').innerHTML=statuses.map(s=>'<div class="stat"><b>'+a.filter(x=>x.status===s).length+'</b>'+e(s)+'</div>').join('');$('rows').innerHTML=a.map(x=>'<tr onclick="detail(data.items.find(i=>i.id=='+x.id+'))"><td><b>RM-'+x.id+'</b><br>'+e(x.title)+'</td><td><span class="tag">'+e(x.status)+'</span></td><td><div class="bar"><i style="width:'+x.progress+'%"></i></div> '+x.progress+'%</td><td>'+e(x.target_date||'—')+'</td><td>'+e(x.lead_engineer||x.team||'—')+'</td><td>'+e(x.priority)+'</td></tr>').join('');let map=[['Proposed','Planned'],['Approved','Ready'],['Declined','Won’t Do']];$('triage').innerHTML=map.map(([label,s])=>'<div class="lane"><b>'+label+'</b><p>'+a.filter(x=>x.status===s).map(x=>e(x.title)).join('<br>')||'—'+'</p></div>').join('')}$('q').oninput=render;$('status').onchange=render;render()</script></body></html>`))
+# ` + markdownText(data.ProjectName) + ` delivery roadmap
 
-var dashboardTemplate = template.Must(template.New("dashboard").Parse(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cassor dashboard</title><style>
-:root{--bg:#09111f;--panel:#111c30;--card:#17253d;--ink:#eff6ff;--muted:#9bb0ca;--line:#29415f;--accent:#53d3a6;--warn:#ffc857;--danger:#ff7272}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top right,#173560,var(--bg) 45%);color:var(--ink);font:15px ui-sans-serif,system-ui}main{max-width:1280px;margin:auto;padding:32px 20px}header{display:flex;justify-content:space-between;align-items:end;gap:20px}.eyebrow{color:var(--accent);font-weight:700;letter-spacing:.12em;font-size:.75rem}h1{font-size:clamp(2rem,5vw,3.5rem);margin:.2rem 0}p{color:var(--muted)}button,input,select{background:var(--panel);border:1px solid var(--line);color:var(--ink);padding:10px 12px;border-radius:9px;font:inherit}.controls{display:flex;gap:8px;flex-wrap:wrap;margin:28px 0}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}.stat,.card{background:linear-gradient(145deg,var(--card),var(--panel));border:1px solid var(--line);border-radius:14px;padding:16px}.stat b{display:block;font-size:1.8rem;color:var(--accent)}.board{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:18px}.lane h2{font-size:1rem;margin:0 0 10px}.card{margin-bottom:10px;cursor:pointer}.card:hover{border-color:var(--accent);transform:translateY(-2px)}.meta{font-size:.84rem;color:var(--muted);margin-top:8px}.tag{display:inline-block;padding:3px 8px;border-radius:999px;background:#203756;color:#cbe3ff;font-size:.78rem;margin:9px 5px 0 0}.detail{display:none;margin-top:12px;color:var(--muted)}.open .detail{display:block}.empty{color:var(--muted)}@media(max-width:650px){main{padding:20px 14px}header{display:block}.controls>*{width:100%}}
-</style></head><body><main><header><div><div class="eyebrow">CASSOR · DELIVERY DASHBOARD</div><h1 id="name"></h1><p>What is planned, ready, underway, and done.</p></div><button id="theme">Contrast</button></header><section class="stats" id="stats"></section><div class="controls"><input id="search" placeholder="Search roadmap"><select id="category"><option value="">All categories</option></select><select id="horizon"><option value="">All horizons</option></select></div><section class="board" id="board"></section></main><script>const data={{.Data}},$=x=>document.getElementById(x),esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const statuses=['Planned','Ready','In Progress','Blocked','Done','Won’t Do'];$('name').textContent=data.project_name;for(const [id,key] of [['category','category'],['horizon','horizon']])[...new Set(data.items.map(x=>x[key]))].sort().forEach(v=>$(id).insertAdjacentHTML('beforeend','<option>'+esc(v)+'</option>'));function render(){let q=$('search').value.toLowerCase(),c=$('category').value,h=$('horizon').value,items=data.items.filter(x=>(!q||(x.title+x.description+x.rationale).toLowerCase().includes(q))&&(!c||x.category===c)&&(!h||x.horizon===h));$('stats').innerHTML=statuses.map(s=>'<div class="stat"><b>'+items.filter(x=>x.status===s).length+'</b>'+esc(s)+'</div>').join('');$('board').innerHTML=statuses.map(s=>{let cards=items.filter(x=>x.status===s).map(x=>'<article class="card" onclick="this.classList.toggle(\'open\')"><strong>'+esc(x.title)+'</strong><div class="meta">'+esc(x.category)+' · '+esc(x.horizon)+'</div><div class="detail">'+esc(x.description||x.rationale||'No additional detail.')+'</div></article>').join('')||'<p class="empty">Nothing here</p>';return '<section class="lane"><h2>'+esc(s)+'</h2>'+cards+'</section>'}).join('')}$('search').oninput=render;$('category').onchange=render;$('horizon').onchange=render;$('theme').onclick=()=>document.body.classList.toggle('contrast');render()</script></body></html>`))
+This timeline combines verified delivery history with planned target dates. Select a milestone for its technical detail.
 
-var pageTemplate = template.Must(template.New("roadmap").Parse(`<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cassor roadmap</title><style>
-:root{color-scheme:light dark;--bg:#f7f8fb;--card:#fff;--ink:#172033;--muted:#5e6b82;--line:#dbe1ec;--accent:#635bff}.dark{--bg:#111521;--card:#1a2030;--ink:#f4f6fb;--muted:#aab5cb;--line:#303a50;--accent:#a9a5ff}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px system-ui,sans-serif}main{max-width:1100px;margin:auto;padding:32px 20px}header{display:flex;justify-content:space-between;gap:18px;align-items:start}h1{margin:0;font-size:2rem}h2{margin:32px 0 12px}p{color:var(--muted)}button,select{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:var(--card);color:var(--ink)}.filters{display:flex;flex-wrap:wrap;gap:8px;margin:24px 0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}.meta{color:var(--muted);font-size:.86rem}.tag{display:inline-block;background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent);border-radius:999px;padding:3px 8px;margin:8px 5px 0 0;font-size:.8rem}.empty{color:var(--muted);font-style:italic}@media(max-width:600px){main{padding:22px 14px}header{display:block}header button{margin-top:14px}}
-</style></head><body><main><header><div><p class="meta">CASSOR ROADMAP</p><h1 id="project"></h1><p>Approved work, proposals, and verified delivery history.</p></div><button id="theme">Toggle theme</button></header><div class="filters"><select id="category"><option value="">All categories</option></select><select id="horizon"><option value="">All horizons</option></select><select id="status"><option value="">All statuses</option></select></div><h2>Roadmap</h2><div class="grid" id="items"></div><h2>Plan approval state</h2><div class="grid" id="plans"></div><h2>Completed-task history</h2><div class="grid" id="completed"></div></main><script>const data={{.Data}};const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const card=(title,body)=>'<article class="card"><strong>'+esc(title)+'</strong>'+body+'</article>';$('project').textContent=data.project_name;for(const [id,key]of [['category','category'],['horizon','horizon'],['status','status']]){[...new Set(data.items.map(x=>x[key]))].sort().forEach(v=>$(id).insertAdjacentHTML('beforeend','<option>'+esc(v)+'</option>'))}function render(){const visible=data.items.filter(x=>(!$('category').value||x.category===$('category').value)&&(!$('horizon').value||x.horizon===$('horizon').value)&&(!$('status').value||x.status===$('status').value));$('items').innerHTML=visible.length?visible.map(x=>card(x.title,'<div class="meta">'+esc(x.description||x.rationale||'No description')+'</div><span class="tag">'+esc(x.category)+'</span><span class="tag">'+esc(x.horizon)+'</span><span class="tag">'+esc(x.status)+'</span>')).join(''):'<p class="empty">No roadmap items match these filters.</p>';$('plans').innerHTML=data.plans.length?data.plans.map(x=>card(x.item_title,'<div class="meta">Revision '+x.revision+'</div><span class="tag">'+esc(x.status)+'</span>')).join(''):'<p class="empty">No plans yet.</p>';$('completed').innerHTML=data.completed_tasks.length?data.completed_tasks.map(x=>card(x.title,'<div class="meta">'+esc(x.outcome||'Completed')+'</div>')).join(''):'<p class="empty">No completed tasks yet.</p>'}document.querySelectorAll('select').forEach(x=>x.onchange=render);$('theme').onclick=()=>document.documentElement.classList.toggle('dark');render();</script></body></html>`))
+<section class="timeline">`)
+	for _, milestone := range milestones {
+		if milestone.Kind == "unscheduled" {
+			page.WriteString(`</section><h2>Unscheduled</h2><section class="timeline unscheduled">`)
+		}
+		item := milestone.Item
+		page.WriteString(`
+<article class="milestone ` + milestone.Kind + `"><span class="dot"></span><a class="card" href="/roadmap/rm-` + strconv.FormatInt(item.ID, 10) + `/"><span class="date">` + milestone.Date + `</span><br><strong>RM-` + strconv.FormatInt(item.ID, 10) + ` · ` + markdownText(item.Title) + `</strong><br><span class="meta">` + markdownText(item.Status) + ` · ` + strconv.Itoa(item.Progress) + `% complete</span></a></article>`)
+	}
+	return page.String() + "\n</section>\n"
+}
+
+func timelineMilestones(data roadmapData) []milestone {
+	plans := map[int64]int64{}
+	for _, plan := range data.Plans {
+		plans[plan.ID] = plan.ItemID
+	}
+	completed := map[int64]string{}
+	for _, task := range data.Completed {
+		if task.CompletedAt != nil {
+			if itemID := plans[task.PlanID]; itemID != 0 && *task.CompletedAt > completed[itemID] {
+				completed[itemID] = (*task.CompletedAt)[:10]
+			}
+		}
+	}
+	values := make([]milestone, 0, len(data.Items))
+	for _, item := range data.Items {
+		value := milestone{Item: item, Date: item.TargetDate, Kind: "planned"}
+		if item.Status == "Done" {
+			value.Date, value.Kind = completed[item.ID], "done"
+		}
+		if value.Date == "" {
+			value.Date, value.Kind = "Unscheduled", "unscheduled"
+		}
+		values = append(values, value)
+	}
+	sort.SliceStable(values, func(i, j int) bool {
+		if values[i].Kind == "unscheduled" {
+			return false
+		}
+		if values[j].Kind == "unscheduled" {
+			return true
+		}
+		return values[i].Date < values[j].Date
+	})
+	return values
+}
+
+func featurePage(item store.Item) string {
+	var page strings.Builder
+	page.WriteString(frontmatter("RM-"+strconv.FormatInt(item.ID, 10)+" · "+item.Title, valueOr(item.Description, item.Rationale)))
+	page.WriteString("\n# RM-" + strconv.FormatInt(item.ID, 10) + " · " + markdownText(item.Title) + "\n\n")
+	page.WriteString("**Status:** " + markdownText(item.Status) + "  \n**Progress:** " + strconv.Itoa(item.Progress) + "%  \n**Category:** " + markdownText(item.Category) + "  \n**Horizon:** " + markdownText(item.Horizon) + "\n\n")
+	page.WriteString("## Summary\n\n" + markdownText(valueOr(item.TechnicalSummary, valueOr(item.Description, item.Rationale))) + "\n\n")
+	page.WriteString("## Delivery details\n\n")
+	for _, detail := range [][2]string{{"Target date", item.TargetDate}, {"Team", item.Team}, {"Lead engineer", item.LeadEngineer}, {"Priority", item.Priority}, {"Complexity", item.Complexity}} {
+		page.WriteString("- **" + detail[0] + ":** " + markdownText(valueOr(detail[1], "Unassigned")) + "\n")
+	}
+	page.WriteString("\n## Technical specifications\n")
+	for _, spec := range decodeSpecifications(item.Specifications) {
+		marker := " "
+		if spec.Done {
+			marker = "x"
+		}
+		page.WriteString("\n- [" + marker + "] " + markdownText(spec.Title))
+		if spec.Description != "" {
+			page.WriteString(" — " + markdownText(spec.Description))
+		}
+	}
+	links := decodeLinks(item.DocumentationLinks)
+	if len(links) > 0 {
+		page.WriteString("\n\n## Related documentation\n")
+		for _, link := range links {
+			page.WriteString("\n- " + documentationLink(link))
+		}
+	}
+	return page.String() + "\n"
+}
+
+func decodeSpecifications(raw string) []specification {
+	values := []specification{}
+	if json.Unmarshal([]byte(raw), &values) == nil {
+		return values
+	}
+	var labels []string
+	if json.Unmarshal([]byte(raw), &labels) == nil {
+		for _, label := range labels {
+			values = append(values, specification{Title: label})
+		}
+	}
+	return values
+}
+
+func decodeLinks(raw string) []string {
+	var links []string
+	if json.Unmarshal([]byte(raw), &links) != nil {
+		return nil
+	}
+	return links
+}
+
+func documentationLink(path string) string {
+	routes := map[string]string{
+		"docs/CASSOR_CODEX_HANDOFF.md":      "/guides/project-handoff/",
+		"docs/CASSOR_PLAN_PACKET_SCHEMA.md": "/guides/plan-packet-schema/",
+		"docs/CASSOR_SKILLS_SPEC.md":        "/guides/skills-specification/",
+	}
+	if route, ok := routes[path]; ok {
+		return "[" + markdownText(path) + "](" + route + ")"
+	}
+	return "`" + strings.ReplaceAll(path, "`", "") + "`"
+}
+
+func frontmatter(title, description string) string {
+	return "---\ntitle: " + strconv.Quote(title) + "\ndescription: " + strconv.Quote(description) + "\n---\n"
+}
+
+func markdownText(value string) string {
+	replacer := strings.NewReplacer("\\", "\\\\", "*", "\\*", "_", "\\_", "[", "\\[", "]", "\\]", "<", "&lt;", ">", "&gt;")
+	return replacer.Replace(value)
+}
+
+func valueOr(value, fallback string) string {
+	if value != "" {
+		return value
+	}
+	return fallback
+}
