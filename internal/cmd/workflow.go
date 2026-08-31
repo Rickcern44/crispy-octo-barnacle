@@ -131,8 +131,10 @@ func itemCommand() *cobra.Command {
 	show := showItemCommand()
 	update := updateItemCommand()
 	ready := itemTransitionCommand("ready", "Ready")
+	start := itemTransitionCommand("start", "In Progress")
+	complete := itemTransitionCommand("complete", "Done")
 	cancel := itemTransitionCommand("cancel", "Won’t Do")
-	command.AddCommand(add, list, show, update, itemMetadataCommand(), ready, cancel)
+	command.AddCommand(add, list, show, update, itemMetadataCommand(), ready, start, complete, cancel)
 	return command
 }
 func itemMetadataCommand() *cobra.Command {
@@ -241,7 +243,7 @@ func itemTransitionCommand(use, status string) *cobra.Command {
 			return err
 		}
 		defer database.Close()
-		if err := store.SetItemStatus(database, value, status); err != nil {
+		if err := store.TransitionItemStatus(database, value, status); err != nil {
 			return err
 		}
 		_, err = fmt.Fprintf(command.OutOrStdout(), "Roadmap item %d %s\n", value, strings.ToLower(status))

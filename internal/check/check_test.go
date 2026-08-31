@@ -53,3 +53,46 @@ func TestRunAcceptsValidStateAndRejectsBrokenLifecycle(t *testing.T) {
 		t.Fatal("Run() accepted a completed task without lifecycle details")
 	}
 }
+
+func TestRunAcceptsCompletedItemWithApprovedPlan(t *testing.T) {
+	root := t.TempDir()
+	state := filepath.Join(root, project.StateDirectory)
+	if err := os.Mkdir(state, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.Write(config.Path(state), config.Config{Name: "Check"}); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(state, store.DatabaseFileName)
+	if err := store.Initialize(path); err != nil {
+		t.Fatal(err)
+	}
+	database, err := store.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	item, err := store.AddItem(database, "Item", "", "Needed", "Now", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.TransitionItemStatus(database, item.ID, "Ready"); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := store.CreatePlan(database, item.ID, "Plan")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ApprovePlan(database, plan.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.TransitionItemStatus(database, item.ID, "In Progress"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.TransitionItemStatus(database, item.ID, "Done"); err != nil {
+		t.Fatal(err)
+	}
+	if err := Run(state); err != nil {
+		t.Fatalf("Run() completed item error = %v", err)
+	}
+}

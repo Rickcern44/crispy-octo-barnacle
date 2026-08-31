@@ -102,7 +102,7 @@ func foreignKeyCheck(database *sql.DB) error {
 
 func workflowCheck(database *sql.DB) error {
 	checks := []struct{ query, message string }{
-		{`SELECT COUNT(*) FROM plan_revisions p JOIN roadmap_items i ON i.id=p.roadmap_item_id WHERE p.status='Approved' AND (p.approved_at IS NULL OR i.status!='Ready')`, "approved plans must belong to ready items and have approval timestamps"},
+		{`SELECT COUNT(*) FROM plan_revisions p JOIN roadmap_items i ON i.id=p.roadmap_item_id WHERE p.status='Approved' AND (p.approved_at IS NULL OR i.status NOT IN ('Ready','In Progress','Done'))`, "approved plans must belong to active or completed items and have approval timestamps"},
 		{`SELECT COUNT(*) FROM plan_revisions WHERE status='Draft' AND approved_at IS NOT NULL`, "draft plans cannot have approval timestamps"},
 		{`SELECT COUNT(*) FROM tasks t JOIN plan_revisions p ON p.id=t.plan_revision_id WHERE t.status IN ('In Progress','Done','Blocked') AND p.status!='Approved'`, "started, done, and blocked tasks must belong to approved plans"},
 		{`SELECT COUNT(*) FROM tasks WHERE status='To Do' AND (started_at IS NOT NULL OR completed_at IS NOT NULL OR blocked_at IS NOT NULL)`, "to-do tasks cannot have lifecycle timestamps"},

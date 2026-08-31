@@ -177,16 +177,30 @@ func UpdateItem(database *sql.DB, id int64, title, description, category, horizo
 	}
 	return GetItem(database, id)
 }
-func SetItemStatus(database *sql.DB, id int64, status string) error {
-	result, err := database.Exec(`UPDATE roadmap_items SET status=?, updated_at=? WHERE id=? AND status='Planned'`, status, now(), id)
+func TransitionItemStatus(database *sql.DB, id int64, status string) error {
+	previous, ok := map[string]string{
+		"Ready":       "Planned",
+		"In Progress": "Ready",
+		"Done":        "In Progress",
+		"Won’t Do":    "Planned",
+	}[status]
+	if !ok {
+		return fmt.Errorf("unsupported roadmap item status %q", status)
+	}
+	result, err := database.Exec(`UPDATE roadmap_items SET status=?, updated_at=? WHERE id=? AND status=?`, status, now(), id, previous)
 	if err != nil {
 		return err
 	}
 	changed, _ := result.RowsAffected()
 	if changed == 0 {
-		return fmt.Errorf("only proposed roadmap items may be %s", status)
+		return fmt.Errorf("roadmap item must be %s before it can be %s", previous, status)
 	}
 	return nil
+}
+
+// SetItemStatus is retained for callers that advance proposed items to Ready or Won’t Do.
+func SetItemStatus(database *sql.DB, id int64, status string) error {
+	return TransitionItemStatus(database, id, status)
 }
 
 func scanPlan(scanner interface{ Scan(...any) error }) (Plan, error) {

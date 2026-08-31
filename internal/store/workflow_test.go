@@ -49,3 +49,30 @@ func TestWorkflowEnforcesApprovalAndImmutablePlans(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestItemStatusTransitionsAreGuarded(t *testing.T) {
+	path := filepath.Join(t.TempDir(), DatabaseFileName)
+	if err := Initialize(path); err != nil {
+		t.Fatal(err)
+	}
+	database, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	item, err := AddItem(database, "Ship lifecycle", "", "Needed", "Now", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := TransitionItemStatus(database, item.ID, "Done"); err == nil {
+		t.Fatal("TransitionItemStatus() completed a proposed item")
+	}
+	for _, status := range []string{"Ready", "In Progress", "Done"} {
+		if err := TransitionItemStatus(database, item.ID, status); err != nil {
+			t.Fatalf("TransitionItemStatus(%q): %v", status, err)
+		}
+	}
+	if err := TransitionItemStatus(database, item.ID, "In Progress"); err == nil {
+		t.Fatal("TransitionItemStatus() restarted a completed item")
+	}
+}
