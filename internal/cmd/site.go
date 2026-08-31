@@ -39,13 +39,16 @@ func newContextCommand() *cobra.Command {
 }
 
 func newSiteCommand() *cobra.Command {
-	command := &cobra.Command{Use: "site", Short: "Build and preview the static roadmap"}
-	command.AddCommand(&cobra.Command{Use: "build", Short: "Generate docs/roadmap/index.html", RunE: func(command *cobra.Command, _ []string) error {
+	command := &cobra.Command{Use: "site", Short: "Build and preview the static developer documentation"}
+	command.AddCommand(&cobra.Command{Use: "build", Short: "Generate the static multi-page documentation site", RunE: func(command *cobra.Command, _ []string) error {
 		root, state, err := currentProject()
 		if err != nil {
 			return err
 		}
-		output, err := site.Build(root, state)
+		if _, err := site.Build(root, state); err != nil {
+			return err
+		}
+		output, err := site.Compile(root)
 		if err != nil {
 			return err
 		}
