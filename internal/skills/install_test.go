@@ -3,8 +3,20 @@ package skills
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func TestVerifyManagedFileExplainsAvailableUpdate(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "SKILL.md"), []byte("installed"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := verifyManagedFile(root, Installation{Files: []ManagedFile{{Path: "SKILL.md", SHA256: hash([]byte("installed"))}}}, "SKILL.md", []byte("new version"))
+	if err == nil || !strings.Contains(err.Error(), "Cassor skill update available") || !strings.Contains(err.Error(), "cassor skills update") {
+		t.Fatalf("update error = %v", err)
+	}
+}
 
 func TestInstallIsIdempotentAndTracksManifest(t *testing.T) {
 	root := t.TempDir()
