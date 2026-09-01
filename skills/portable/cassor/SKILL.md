@@ -19,9 +19,19 @@ When runtime capabilities are limited, perform the role contracts sequentially a
 
 ## Codex adaptive orchestration
 
-For a Codex runtime, first determine whether subagents, parallel execution, isolated contexts, and structured returns are available. Dispatch workers only when independent work materially improves the result: use focused discovery workers for separate lenses, one implementation worker only after plan approval, and an independent verifier for substantial changes. Keep small, local, or tightly coupled work in the orchestrator context.
+Before dispatch, assess only capabilities the current Codex runtime actually exposes: subagents, parallel execution, isolated worker contexts, compact structured returns, and explicit worker-model routing. Do not infer or claim any unavailable capability. Explicit model routing is optional: when available, select a model appropriate to the bounded role; when unavailable, use the runtime default without claiming a model choice.
 
-The orchestrator is the only user-facing role and the only role allowed to record plans, transition Cassor state, or approve work. Every worker receives an exact bounded task, the relevant role contract, repository boundaries, and explicit mutation authority. Workers must not ask the user questions, approve plans, alter Cassor state, or persist transcripts. When a capability is unavailable, run the same role contract sequentially and compact its result.
+Choose the execution shape from the work and those capabilities:
+
+| Work shape | Execution |
+| --- | --- |
+| Small, local, tightly coupled, or not materially improved by specialization | Orchestrator performs the role locally. |
+| Independent, bounded discovery lenses with material benefit, and safe parallel isolated contexts | Parallel read-only discovery workers. |
+| Approved implementation with material benefit from delegation and safe isolation | Exactly one implementation worker; never concurrent implementation workers. |
+| Substantial, independently checkable verification with safe parallel isolated contexts | An independent read-only verification worker, optionally parallel only with other read-only work. |
+| Any required worker, parallel, isolation, or return capability is unavailable or unsafe | Perform the same role contracts sequentially in the orchestrator context. |
+
+Parallel workers are read-only. An implementation worker receives write authority only after plan approval, only for its exact task and repository boundary, and must run alone with respect to repository mutations. The orchestrator is the only user-facing role and the only role allowed to record plans, transition Cassor state, or approve work. Every worker receives an exact bounded task, the relevant role contract, repository boundaries, and explicit mutation authority. Workers must not ask the user questions, approve plans, alter Cassor state, or persist transcripts. Return only the applicable compact schema; if structured returns are unavailable, consolidate an equivalently compact, evidence-based result without representing it as runtime-provided structure.
 
 At the end of a run, include a compact handoff summary: roles dispatched, execution mode (single-agent, sequential, or parallel), elapsed time when available, and token usage only when the runtime exposes it. Use `cassor run-report` for a shareable text or JSON rendering of observed metrics; unavailable token fields remain unavailable. Do not persist this summary, telemetry, or raw worker transcripts.
 

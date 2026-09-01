@@ -1,6 +1,7 @@
 package skills
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -139,5 +140,54 @@ func TestInstallAllCreatesNativeDestinations(t *testing.T) {
 	}
 	if len(manifest.Installations) != 3 {
 		t.Fatalf("installations=%d", len(manifest.Installations))
+	}
+}
+
+func TestCodexInstallDeliversAdaptiveDispatchPolicyFromEmbeddedAssets(t *testing.T) {
+	root := t.TempDir()
+	state := filepath.Join(root, ".cassor")
+	if err := os.Mkdir(state, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	assets, err := portableAssets()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path, required := range map[string][]string{
+		"SKILL.md": {
+			"subagents, parallel execution, isolated worker contexts, compact structured returns, and explicit worker-model routing",
+			"Parallel workers are read-only.",
+			"Exactly one implementation worker; never concurrent implementation workers.",
+			"Perform the same role contracts sequentially in the orchestrator context.",
+		},
+		"references/protocol.md": {
+			"Treat an unknown capability as unavailable.",
+			"Parallel work requires available parallel execution and isolated contexts.",
+			"Never run more than one implementation worker",
+			"The orchestrator alone retains those authorities.",
+		},
+	} {
+		contents, ok := assets[path]
+		if !ok {
+			t.Fatalf("embedded assets missing %s", path)
+		}
+		for _, text := range required {
+			if !strings.Contains(string(contents), text) {
+				t.Errorf("embedded %s missing adaptive dispatch policy %q", path, text)
+			}
+		}
+	}
+
+	if _, err := Install(root, state, InstallOptions{Agent: "codex", Scope: "project"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"SKILL.md", "references/protocol.md"} {
+		installed, err := os.ReadFile(filepath.Join(root, ".agents", "skills", "cassor", path))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(installed, assets[path]) {
+			t.Errorf("installed %s differs from its embedded portable asset", path)
+		}
 	}
 }
