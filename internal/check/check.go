@@ -115,6 +115,9 @@ func workflowCheck(database *sql.DB) error {
 		{`SELECT COUNT(*) FROM tasks t LEFT JOIN task_events e ON e.task_id=t.id AND e.status='Blocked' WHERE t.status='Blocked' AND e.id IS NULL`, "blocked tasks need a blocking history event"},
 		{`SELECT COUNT(*) FROM acceptance_criteria WHERE status IN ('Passed','Failed','Waived') AND (verified_at IS NULL OR trim(evidence)='')`, "verified criteria need timestamps and evidence"},
 		{`SELECT COUNT(*) FROM acceptance_criteria WHERE status='Waived' AND (trim(waived_by)='' OR trim(waiver_reason)='')`, "waived criteria need attribution and a reason"},
+		{`SELECT COUNT(*) FROM feature_change_links l JOIN roadmap_items c ON c.id=l.change_item_id JOIN roadmap_items p ON p.id=l.capability_item_id WHERE c.feature_type<>'Change' OR p.feature_type<>'Capability'`, "change links must connect Changes to Capabilities"},
+		{`SELECT COUNT(*) FROM capability_state_history h JOIN roadmap_items c ON c.id=h.capability_item_id LEFT JOIN roadmap_items s ON s.id=h.source_change_item_id WHERE c.feature_type<>'Capability' OR (h.source_change_item_id IS NOT NULL AND s.feature_type<>'Change') OR trim(h.state)='' OR trim(h.accepted_by)='' OR trim(h.accepted_at)=''`, "capability state history must be attributed and type-safe"},
+		{`SELECT COUNT(*) FROM dossier_artifacts WHERE status='Accepted' AND (trim(evidence)='' OR accepted_at IS NULL OR trim(COALESCE(accepted_by,''))='')`, "accepted dossier artifacts need evidence and attribution"},
 	}
 	for _, check := range checks {
 		var count int

@@ -36,6 +36,7 @@ func NewRootCommand() *cobra.Command {
 	command.AddCommand(newSkillsCommand())
 	command.AddCommand(newRunReportCommand())
 	command.AddCommand(newExportCommand(), newImportCommand())
+	command.AddCommand(newBenchmarkCommand())
 	return command
 }
 

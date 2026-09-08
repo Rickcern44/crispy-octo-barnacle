@@ -117,10 +117,10 @@ The body should contain only:
 3. The workflow state machine.
 4. The approval invariants.
 5. How to select relevant role references.
-6. How to handle runtime capability limitations.
-7. Links to the protocol, schemas, and role contracts.
+6. How to handle runtime capability limitations at a high level.
+7. Links to the protocol, schemas, role contracts, and on-demand adaptive orchestration reference.
 
-Detailed output schemas and role instructions belong in references so they are loaded only when needed.
+Detailed output schemas, role instructions, and runtime-specific dispatch/model details belong in references so they are loaded only when needed.
 
 ## 6. Workflow state machine
 
@@ -393,33 +393,11 @@ Advisory improvements do not fail an otherwise conforming implementation and are
 
 ## 15. Model classes and capability negotiation
 
-The portable skill uses capability labels rather than vendor model names:
-
-```yaml
-models:
-  orchestrator: frontier
-  discovery: economical
-  implementation: economical-coding
-  verification: economical-coding
-```
-
-Each adapter maps these labels to runtime-supported configuration where possible.
-
-At startup, the orchestrator determines whether the runtime supports:
-
-- Subagent creation
-- Explicit worker model selection
-- Parallel workers
-- Isolated worker context
-- Custom worker profiles
-- Worker-to-orchestrator structured return
-
-Fallback rules:
-
-1. If subagents and model selection are supported, use configured role models.
-2. If subagents exist without model selection, use them with the runtime default.
-3. If no subagents exist, execute role contracts sequentially in the orchestrator context and immediately compact their results.
-4. Never claim that a cheaper model was used when the runtime cannot guarantee it.
+Runtime capability assessment, execution-shape selection, portable role
+classes, optional model routing, fallback behavior, and compact worker returns
+are maintained in the on-demand
+`skills/portable/cassor/references/adaptive-orchestration.md` reference. The
+entry skill does not require those runtime details for ordinary local work.
 
 ## 16. Runtime adapters
 
@@ -455,6 +433,14 @@ User skill location:
 
 The Claude adapter may install custom subagent definitions when explicitly requested and supported. Custom agents should preload only the role material they need. The installer must preserve existing Claude configuration.
 
+The project adapter currently installs the runtime-specific
+`references/adapters/claude-code.md` guidance alongside the canonical skill.
+It does not create custom agents, modify global Claude settings, hooks, MCP
+configuration, or unrelated instructions. Claude worker isolation and model
+routing are reported as unavailable unless the current session explicitly
+exposes them; the safe default is a single orchestrator using Cassor CLI
+authority.
+
 ### 16.3 GitHub Copilot
 
 Preferred project skill location:
@@ -471,6 +457,16 @@ Supported personal locations include:
 ```
 
 Copilot supports the open skill structure, but the adapter must treat subagent/model routing as optional runtime capability. It may add repository-wide Copilot instructions only with separate user authorization.
+
+The project adapter currently installs the runtime-specific
+`references/adapters/copilot.md` guidance alongside the canonical skill. It
+does not create custom agents or modify repository-wide Copilot instructions,
+hooks, MCP configuration, or unrelated files. The safe fallback is a single
+orchestrator whenever delegation or explicit model routing is unavailable.
+
+Use `cassor skills capabilities --json` to inspect adapter installation state,
+configured model routing, and unavailable worker capabilities without inferring
+support from a runtime name alone.
 
 ## 17. Installer commands
 

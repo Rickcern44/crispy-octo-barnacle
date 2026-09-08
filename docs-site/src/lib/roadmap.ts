@@ -1,7 +1,4 @@
-import roadmap from "./generated/roadmap.json";
-
-export type Roadmap = typeof roadmap;
-export type Item = Roadmap["items"][number];
+import sourceRoadmap from "./generated/roadmap.json";
 export type Specification = {
 	title: string;
 	description: string;
@@ -17,7 +14,60 @@ export type FeatureRelationship = {
 	created_at: string;
 };
 
+export type FeatureChangeLink = {
+	id: number;
+	change_item_id: number;
+	change_item_title: string;
+	capability_item_id: number;
+	capability_title: string;
+	created_at: string;
+};
+
+export type CapabilityState = {
+	capability_item_id: number;
+	state: string;
+	accepted_by: string;
+	accepted_at: string;
+	source_change_item_id?: number;
+};
+
+export type DossierArtifact = {
+	item_id: number;
+	kind: string;
+	status: string;
+	summary: string;
+	author_role: string;
+};
+
+type RoadmapSource = typeof sourceRoadmap & {
+	generated_at?: string;
+	change_links?: FeatureChangeLink[];
+	capability_state_history?: CapabilityState[];
+	dossier_artifacts?: DossierArtifact[];
+};
+
+export type Roadmap = RoadmapSource & {
+	generated_at: string;
+	change_links: FeatureChangeLink[];
+	capability_state_history: CapabilityState[];
+	dossier_artifacts: DossierArtifact[];
+};
+
+export type Item = Roadmap["items"][number];
+
+const source = sourceRoadmap as RoadmapSource;
+export const roadmap = {
+	...source,
+	generated_at: source.generated_at ?? "source snapshot",
+	change_links: source.change_links ?? [],
+	capability_state_history: source.capability_state_history ?? [],
+	dossier_artifacts: source.dossier_artifacts ?? [],
+} as Roadmap;
+
 const relationships: FeatureRelationship[] = roadmap.relationships;
+const changeLinks: FeatureChangeLink[] = roadmap.change_links;
+const capabilityStates: CapabilityState[] = roadmap.capability_state_history;
+const dossierArtifacts: DossierArtifact[] = roadmap.dossier_artifacts;
 
 const planItemIDs = new Map(
 	roadmap.plans.map((plan) => [plan.id, plan.item_id]),
@@ -101,4 +151,20 @@ export function relationshipsForItem(itemID: number) {
 	);
 }
 
-export { roadmap };
+export function changesForCapability(itemID: number) {
+	return changeLinks.filter((link) => link.capability_item_id === itemID);
+}
+
+export function capabilityForChange(itemID: number) {
+	return changeLinks.filter((link) => link.change_item_id === itemID);
+}
+
+export function stateHistoryForCapability(itemID: number) {
+	return capabilityStates.filter(
+		(state) => state.capability_item_id === itemID,
+	);
+}
+
+export function artifactsForItem(itemID: number) {
+	return dossierArtifacts.filter((artifact) => artifact.item_id === itemID);
+}

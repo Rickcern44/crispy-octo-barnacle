@@ -12,3 +12,96 @@ body {
 	color: #e2e8f0;
 	font-family: ui-sans-serif, system-ui, sans-serif;
 }
+
+:focus-visible {
+	outline: 2px solid var(--color-cassor-400);
+	outline-offset: 3px;
+}
+
+.doc-article h1 {
+	margin-top: 0;
+	color: #fff;
+	font-size: clamp(2rem, 4vw, 3rem);
+	font-weight: 800;
+	letter-spacing: -0.03em;
+}
+.doc-article h2 {
+	margin-top: 2.5rem;
+	color: #fff;
+	font-size: 1.5rem;
+	font-weight: 750;
+}
+.doc-article h3 {
+	margin-top: 1.75rem;
+	color: #e2e8f0;
+	font-size: 1.15rem;
+	font-weight: 700;
+}
+.doc-article p {
+	margin-top: 1rem;
+	color: #cbd5e1;
+	line-height: 1.8;
+}
+.doc-article ul,
+.doc-article ol {
+	margin-top: 1rem;
+	padding-left: 1.5rem;
+	color: #cbd5e1;
+	line-height: 1.8;
+}
+.doc-article li + li {
+	margin-top: 0.35rem;
+}
+.doc-article a {
+	color: #67e8f9;
+	text-decoration: underline;
+	text-underline-offset: 3px;
+}
+.doc-article pre {
+	margin-top: 1.25rem;
+	overflow-x: auto;
+	border: 1px solid #1e293b;
+	border-radius: 0.75rem;
+	background: #020617;
+	padding: 1rem;
+	color: #cbd5e1;
+}
+.doc-article code {
+	border-radius: 0.25rem;
+	background: #0f172a;
+	padding: 0.12rem 0.3rem;
+	color: #a5f3fc;
+}
+.doc-article pre code {
+	background: transparent;
+	padding: 0;
+}
+.doc-article table {
+	display: block;
+	margin-top: 1.25rem;
+	overflow-x: auto;
+	border-collapse: collapse;
+	color: #cbd5e1;
+}
+.doc-article th,
+.doc-article td {
+	border: 1px solid #334155;
+	padding: 0.7rem 0.8rem;
+	text-align: left;
+}
+.doc-article th {
+	color: #fff;
+	background: #0f172a;
+}
+.doc-copy-button {
+	display: block;
+	margin: 1.25rem 0 -1.25rem auto;
+	position: relative;
+	z-index: 1;
+	border: 1px solid #334155;
+	border-radius: 0.4rem;
+	background: #0f172a;
+	padding: 0.3rem 0.55rem;
+	color: #a5f3fc;
+	font-size: 0.75rem;
+}

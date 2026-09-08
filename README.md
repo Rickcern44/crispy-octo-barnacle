@@ -43,7 +43,7 @@ go run . site build
 go run . site serve
 ```
 
-For live documentation development, use the small Astro workspace:
+For live documentation development, use the SvelteKit workspace:
 
 ```sh
 cd docs-site

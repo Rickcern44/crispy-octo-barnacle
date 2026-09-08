@@ -15,6 +15,10 @@ type Context struct {
 	PlansAwaiting     []ContextReference `json:"plans_awaiting_approval"`
 	BlockedTasks      []ContextReference `json:"blocked_tasks"`
 	RecentlyCompleted []ContextReference `json:"recently_completed_tasks"`
+	Capabilities      []ContextReference `json:"capabilities"`
+	InFlightChanges   []ContextReference `json:"in_flight_changes"`
+	PlannedWork       []ContextReference `json:"planned_work"`
+	KnownGaps         []ContextReference `json:"known_gaps"`
 	Counts            ContextCounts      `json:"counts"`
 	Truncated         bool               `json:"truncated"`
 }
@@ -25,6 +29,10 @@ type ContextCounts struct {
 	PlansAwaiting     int `json:"plans_awaiting_approval"`
 	BlockedTasks      int `json:"blocked_tasks"`
 	RecentlyCompleted int `json:"recently_completed_tasks"`
+	Capabilities      int `json:"capabilities"`
+	InFlightChanges   int `json:"in_flight_changes"`
+	PlannedWork       int `json:"planned_work"`
+	KnownGaps         int `json:"known_gaps"`
 }
 
 type ContextReference struct {
@@ -49,6 +57,8 @@ type ScopedContext struct {
 	NextAction  ContextAction      `json:"next_action"`
 	Blockers    []ContextReference `json:"blockers"`
 	Evidence    []ContextReference `json:"evidence_references"`
+	Related     []ContextReference `json:"related_features"`
+	Artifacts   []ContextReference `json:"dossier_artifacts"`
 	Omitted     []ContextReference `json:"omitted_details,omitempty"`
 	Truncated   bool               `json:"truncated"`
 	MaxBytes    int                `json:"max_bytes"`
@@ -59,6 +69,8 @@ type ContextItem struct {
 	ID     int64  `json:"id"`
 	Title  string `json:"title"`
 	Status string `json:"status"`
+	Type   string `json:"feature_type"`
+	State  string `json:"current_state,omitempty"`
 }
 
 type ContextAssignment struct {
@@ -111,7 +123,23 @@ func CompactContext(database *sql.DB) (Context, error) {
 	if err != nil {
 		return context, err
 	}
-	context.Truncated = context.Counts.ActiveTasks > len(context.ActiveTasks) || context.Counts.ProposedItems > len(context.ProposedItems) || context.Counts.PlansAwaiting > len(context.PlansAwaiting) || context.Counts.BlockedTasks > len(context.BlockedTasks) || context.Counts.RecentlyCompleted > len(context.RecentlyCompleted)
+	context.Capabilities, context.Counts.Capabilities, err = navigationFeatures(database, "Capability", "", 10)
+	if err != nil {
+		return context, err
+	}
+	context.InFlightChanges, context.Counts.InFlightChanges, err = navigationFeatures(database, "Change", "In Progress", 10)
+	if err != nil {
+		return context, err
+	}
+	context.PlannedWork, context.Counts.PlannedWork, err = navigationFeatures(database, "Change", "Planned,Ready", 10)
+	if err != nil {
+		return context, err
+	}
+	context.KnownGaps, context.Counts.KnownGaps, err = navigationFeatures(database, "Gap", "", 10)
+	if err != nil {
+		return context, err
+	}
+	context.Truncated = context.Counts.ActiveTasks > len(context.ActiveTasks) || context.Counts.ProposedItems > len(context.ProposedItems) || context.Counts.PlansAwaiting > len(context.PlansAwaiting) || context.Counts.BlockedTasks > len(context.BlockedTasks) || context.Counts.RecentlyCompleted > len(context.RecentlyCompleted) || context.Counts.Capabilities > len(context.Capabilities) || context.Counts.InFlightChanges > len(context.InFlightChanges) || context.Counts.PlannedWork > len(context.PlannedWork) || context.Counts.KnownGaps > len(context.KnownGaps)
 	return context, nil
 }
 
@@ -132,6 +160,40 @@ func navigationItems(database *sql.DB, status string, limit int) ([]ContextRefer
 			return nil, 0, err
 		}
 		value.Kind = "item"
+		value.Command = fmt.Sprintf("cassor item show %d", value.ID)
+		values = append(values, value)
+	}
+	return values, count, rows.Err()
+}
+
+func navigationFeatures(database *sql.DB, featureType, statuses string, limit int) ([]ContextReference, int, error) {
+	args := []any{featureType}
+	where := "feature_type=?"
+	if statuses != "" {
+		parts := strings.Split(statuses, ",")
+		placeholders := make([]string, len(parts))
+		for index, part := range parts {
+			placeholders[index] = "?"
+			args = append(args, strings.TrimSpace(part))
+		}
+		where += " AND status IN (" + strings.Join(placeholders, ",") + ")"
+	}
+	var count int
+	if err := database.QueryRow(`SELECT COUNT(*) FROM roadmap_items WHERE `+where, args...).Scan(&count); err != nil {
+		return nil, 0, err
+	}
+	rows, err := database.Query(`SELECT id,title,status FROM roadmap_items WHERE `+where+` ORDER BY updated_at DESC,id DESC LIMIT ?`, append(args, limit)...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	values := []ContextReference{}
+	for rows.Next() {
+		var value ContextReference
+		if err := rows.Scan(&value.ID, &value.Title, &value.Status); err != nil {
+			return nil, 0, err
+		}
+		value.Kind = strings.ToLower(featureType)
 		value.Command = fmt.Sprintf("cassor item show %d", value.ID)
 		values = append(values, value)
 	}
@@ -200,7 +262,25 @@ func BuildScopedContext(database *sql.DB, itemID int64, role string, maxBytes in
 	if err != nil {
 		return ScopedContext{}, err
 	}
-	context := ScopedContext{Version: 1, Item: ContextItem{ID: item.ID, Title: item.Title, Status: item.Status}, Role: role, MaxBytes: maxBytes, Constraints: []string{}, Criteria: []ContextCriterion{}, Blockers: []ContextReference{}, Evidence: []ContextReference{}, Omitted: []ContextReference{}}
+	context := ScopedContext{Version: 1, Item: ContextItem{ID: item.ID, Title: item.Title, Status: item.Status, Type: item.FeatureType, State: item.CurrentState}, Role: role, MaxBytes: maxBytes, Constraints: []string{}, Criteria: []ContextCriterion{}, Blockers: []ContextReference{}, Evidence: []ContextReference{}, Related: []ContextReference{}, Artifacts: []ContextReference{}, Omitted: []ContextReference{}}
+	links, err := ListFeatureChangeLinks(database, itemID)
+	if err != nil {
+		return ScopedContext{}, err
+	}
+	for _, link := range links {
+		if link.ChangeItemID == itemID {
+			context.Related = append(context.Related, ContextReference{Kind: "capability", ID: link.CapabilityItemID, ItemID: link.CapabilityItemID, Title: link.CapabilityTitle, Status: "linked", Command: fmt.Sprintf("cassor item show %d", link.CapabilityItemID)})
+		} else {
+			context.Related = append(context.Related, ContextReference{Kind: "change", ID: link.ChangeItemID, ItemID: link.ChangeItemID, Title: link.ChangeItemTitle, Status: "linked", Command: fmt.Sprintf("cassor item show %d", link.ChangeItemID)})
+		}
+	}
+	artifacts, err := ListDossierArtifactsForItem(database, itemID)
+	if err != nil {
+		return ScopedContext{}, err
+	}
+	for _, artifact := range artifacts {
+		context.Artifacts = append(context.Artifacts, ContextReference{Kind: "artifact", ID: artifact.ID, ItemID: itemID, Title: artifact.Summary, Status: artifact.Status, Command: fmt.Sprintf("cassor item artifact list --item %d", itemID)})
+	}
 	plan, err := scanPlan(database.QueryRow(`SELECT id,roadmap_item_id,revision,content,status,active,created_at,approved_at,approval_note FROM plan_revisions WHERE roadmap_item_id=? AND active=1`, itemID))
 	if err == sql.ErrNoRows {
 		return ScopedContext{}, fmt.Errorf("roadmap item %d has no active approved plan", itemID)

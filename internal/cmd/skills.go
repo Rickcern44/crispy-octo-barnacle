@@ -90,6 +90,19 @@ func newSkillsCommand() *cobra.Command {
 		return output(command, report, doctorJSON)
 	}}
 	doctor.Flags().BoolVar(&doctorJSON, "json", false, "emit JSON")
-	command.AddCommand(update, uninstall, doctor)
+	var capabilitiesJSON bool
+	capabilities := &cobra.Command{Use: "capabilities", RunE: func(command *cobra.Command, _ []string) error {
+		root, state, err := currentProject()
+		if err != nil {
+			return err
+		}
+		report, err := install.Capabilities(root, state)
+		if err != nil {
+			return err
+		}
+		return output(command, report, capabilitiesJSON)
+	}}
+	capabilities.Flags().BoolVar(&capabilitiesJSON, "json", false, "emit JSON")
+	command.AddCommand(update, uninstall, doctor, capabilities)
 	return command
 }

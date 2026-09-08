@@ -24,6 +24,20 @@ func TestPortableStateRoundTripIsDeterministic(t *testing.T) {
 	if _, err := AddFeatureRelationship(source, itemTwo.ID, recorded.Plan.ItemID, "depends_on"); err != nil {
 		t.Fatal(err)
 	}
+	capability, err := AddItem(source, "Authentication capability", "", "Needed", "Now", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	featureType := "Capability"
+	if _, err := UpdateItemDossier(source, capability.ID, &featureType, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AddFeatureChangeLink(source, itemTwo.ID, capability.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AddDossierArtifact(source, capability.ID, "research", "discovery", "Capability finding", "source inspection", nil); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := AddPhaseRecord(source, recorded.Plan.ItemID, "Verify", "round trip verified"); err != nil {
 		t.Fatal(err)
 	}

@@ -13,7 +13,7 @@ const expectations = [
 	[files.detail, "{displayProgress(item)}%", "detail-page progress display"],
 	[files.roadmap, "export function specificationsForItem", "specification parsing helper"],
 	[files.roadmap, "export const shippedFeatureCount", "derived shipped-feature count"],
-	[files.timeline, "{shippedFeatureCount} features shipped", "dashboard shipped counter"],
+	[files.timeline, "{shippedFeatureCount} delivered items", "dashboard delivered counter"],
 	[files.detail, "{#if specifications.length > 0}", "conditional specification section"],
 ];
 

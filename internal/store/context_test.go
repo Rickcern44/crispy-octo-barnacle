@@ -121,3 +121,37 @@ func TestDefaultContextIsNavigationBoundedAndRolesAreExplicit(t *testing.T) {
 		t.Fatal("unknown context role was accepted")
 	}
 }
+
+func TestDefaultContextProjectsCapabilitiesChangesAndGaps(t *testing.T) {
+	database := openTestDatabase(t)
+	capability, err := AddItem(database, "Authentication", "", "Needed", "Now", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	featureType := "Capability"
+	if _, err := UpdateItemDossier(database, capability.ID, &featureType, nil); err != nil {
+		t.Fatal(err)
+	}
+	change, err := AddItem(database, "Passkeys", "", "Needed", "Next", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := TransitionItemStatus(database, change.ID, "Ready"); err != nil {
+		t.Fatal(err)
+	}
+	gap, err := AddItem(database, "Legacy session gap", "", "Technical debt", "Later", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	gapType := "Gap"
+	if _, err := UpdateItemDossier(database, gap.ID, &gapType, nil); err != nil {
+		t.Fatal(err)
+	}
+	context, err := CompactContext(database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if context.Counts.Capabilities != 1 || context.Counts.PlannedWork != 1 || context.Counts.KnownGaps != 1 {
+		t.Fatalf("dossier projections = %#v", context.Counts)
+	}
+}

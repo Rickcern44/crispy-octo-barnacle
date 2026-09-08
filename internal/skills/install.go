@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/rickcern44/cassor/internal/config"
@@ -77,7 +78,7 @@ func Install(repositoryRoot, stateDir string, options InstallOptions) (InstallRe
 		return InstallResult{}, fmt.Errorf("scope %q is not supported yet; use project", options.Scope)
 	}
 	destination := filepath.Join(repositoryRoot, filepath.FromSlash(destinationFor(options.Agent)))
-	assets, err := portableAssets()
+	assets, err := assetsForAgent(options.Agent)
 	if err != nil {
 		return InstallResult{}, err
 	}
@@ -143,16 +144,16 @@ func installAll(root, state string, options InstallOptions) (InstallResult, erro
 	if options.Scope != "project" {
 		return InstallResult{}, fmt.Errorf("scope %q is not supported yet; use project", options.Scope)
 	}
-	assets, err := portableAssets()
-	if err != nil {
-		return InstallResult{}, err
-	}
 	manifest, err := readManifest(ManifestPath(state))
 	if err != nil {
 		return InstallResult{}, err
 	}
 	result := InstallResult{Agent: "all", Scope: options.Scope}
 	for _, agent := range []string{"codex", "claude-code", "copilot"} {
+		assets, err := assetsForAgent(agent)
+		if err != nil {
+			return result, err
+		}
 		destination := filepath.Join(root, filepath.FromSlash(destinationFor(agent)))
 		installation := findInstallation(manifest, agent, options.Scope)
 		if installation != nil {
@@ -178,6 +179,10 @@ func installAll(root, state string, options InstallOptions) (InstallResult, erro
 	for _, agent := range []string{"codex", "claude-code", "copilot"} {
 		if findInstallation(manifest, agent, options.Scope) != nil {
 			continue
+		}
+		assets, err := assetsForAgent(agent)
+		if err != nil {
+			return result, err
 		}
 		destination := filepath.Join(root, filepath.FromSlash(destinationFor(agent)))
 		if err := writeAtomically(destination, assets); err != nil {
@@ -218,7 +223,7 @@ func Update(repositoryRoot, stateDir, agent, scope string) (LifecycleResult, err
 	if installation == nil {
 		return LifecycleResult{}, fmt.Errorf("no managed %s %s skill installation", scope, agent)
 	}
-	assets, err := portableAssets()
+	assets, err := assetsForAgent(agent)
 	if err != nil {
 		return LifecycleResult{}, err
 	}
@@ -317,7 +322,7 @@ func portableAssets() (map[string][]byte, error) {
 		if err != nil {
 			return err
 		}
-		if entry.IsDir() || path == "embed.go" {
+		if entry.IsDir() || path == "embed.go" || strings.HasPrefix(path, "references/adapters/") {
 			return nil
 		}
 		contents, err := portable.Files.ReadFile(path)
@@ -328,6 +333,22 @@ func portableAssets() (map[string][]byte, error) {
 		return nil
 	})
 	return files, err
+}
+
+func assetsForAgent(agent string) (map[string][]byte, error) {
+	assets, err := portableAssets()
+	if err != nil {
+		return nil, err
+	}
+	if agent == "claude-code" || agent == "copilot" {
+		path := "references/adapters/" + agent + ".md"
+		contents, err := portable.Files.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", path, err)
+		}
+		assets[path] = contents
+	}
+	return assets, nil
 }
 func readManifest(path string) (Manifest, error) {
 	contents, err := os.ReadFile(path)
@@ -398,6 +419,9 @@ func writeAtomically(destination string, assets map[string][]byte) error {
 	return os.Rename(temporary, destination)
 }
 func writeFileAtomically(path string, contents []byte, permission fs.FileMode) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
 	temporary := path + ".tmp"
 	if err := os.WriteFile(temporary, contents, permission); err != nil {
 		return err

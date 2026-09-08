@@ -197,14 +197,14 @@ func UpdateItemDossier(database *sql.DB, id int64, featureType, currentState *st
 	if err != nil {
 		return item, err
 	}
+	if currentState != nil {
+		return item, fmt.Errorf("current state must be accepted with a completed linked change")
+	}
 	if featureType != nil {
 		if !validFeatureType(*featureType) {
 			return item, fmt.Errorf("unsupported feature type %q", *featureType)
 		}
 		item.FeatureType = *featureType
-	}
-	if currentState != nil {
-		item.CurrentState = *currentState
 	}
 	if _, err := database.Exec(`UPDATE roadmap_items SET feature_type=?,current_state=?,updated_at=? WHERE id=?`, item.FeatureType, item.CurrentState, now(), id); err != nil {
 		return item, err

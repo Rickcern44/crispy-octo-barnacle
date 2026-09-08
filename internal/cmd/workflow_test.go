@@ -41,7 +41,7 @@ func TestItemDossierAndRelationshipCommands(t *testing.T) {
 	}
 
 	command := NewRootCommand()
-	command.SetArgs([]string{"item", "update", "1", "--feature-type", "Capability", "--current-state", "Password login is supported."})
+	command.SetArgs([]string{"item", "update", "1", "--feature-type", "Capability"})
 	if err := command.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestItemDossierAndRelationshipCommands(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.FeatureType != "Capability" || updated.CurrentState != "Password login is supported." {
+	if updated.FeatureType != "Capability" || updated.CurrentState != "" {
 		t.Fatalf("updated feature = %#v", updated)
 	}
 

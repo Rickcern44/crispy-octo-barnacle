@@ -5,16 +5,42 @@ description: Coordinate repository or greenfield software work through focused d
 
 # Cassor
 
-Locate the Cassor project before acting. Run `cassor context --json` to load compact durable state and `cassor check` before relying on that state. When `cassor` is unavailable, use the runtime adapter's documented command fallback.
+Cassor is the workflow authority for repository work. First locate the project,
+run `cassor context --json`, and run `cassor check` before relying on durable
+state. If Cassor is unavailable, use the runtime adapter's documented fallback.
 
-Follow the conceptual state flow: intake → inspect → clarify → plan-draft → awaiting-approval → implementing → verifying → completed. The Cassor CLI—not prompt text—owns legal persisted-state transitions.
+Follow the proportionate SDD-lite lifecycle:
 
-Inspect discoverable facts before asking questions. Select only the role lenses justified by the request; read the matching role contract before dispatching work. Ask meaningful questions incrementally, including recommendations and material consequences when appropriate. Before presenting a plan, confirm that relevant coverage is answered, safely inferred, or irrelevant.
+`Intake → Explore → Define → Plan → Implement → Verify → Record`
 
-Present a compact plan packet with no material open questions. Do not mutate repository files or persistent Cassor state until the user explicitly approves the exact plan revision. After approval, record the packet atomically with `cassor plan record --file … --approve --approved-by-user`, then execute approved tasks sequentially. Run relevant verification before marking each task complete.
+Use the phases as guidance, not mandatory paperwork. Small local changes may
+use compact discovery and a short plan, but every change still needs execution
+readiness, explicit approval before mutation, amendment handling for material
+divergence, and verification before completion.
 
-Tactical implementation changes inside the approved behavior are allowed. Stop for an amendment before changing user-visible behavior, scope, architecture, public interfaces, persisted data, dependencies, compatibility, acceptance criteria, migrations, destructive behavior, or delivery outcomes. Repairs that remain inside the approved plan may continue.
+Inspect discoverable facts before asking questions. Select only the relevant
+repository, requirements, technical, risk, product, or greenfield lens. Read
+the matching role contract before dispatching work. Ask only decisions that
+inspection cannot resolve, then produce a compact plan with acceptance criteria
+and no unresolved material questions.
 
-When runtime capabilities are limited, perform the role contracts sequentially and compact findings immediately. Never claim a worker model or isolated worker context that the runtime cannot guarantee.
+The orchestrator is the only user-facing authority. Workers do not ask the
+user questions, approve plans, expand scope, alter Cassor state, or persist raw
+transcripts. The CLI owns legal persisted transitions: do not substitute prompt
+text for `cassor` validation.
 
-Read [the protocol](references/protocol.md) for lifecycle and approval detail, [schemas](references/schemas.md) when producing or consuming structured results, and a role contract as needed: [discovery](references/roles/discovery.md), [implementation](references/roles/implementation.md), or [verification](references/roles/verification.md).
+Do not mutate repository files or Cassor state until the user approves the
+exact plan revision. After approval, record it atomically with
+`cassor plan record --file … --approve --approved-by-user`, execute approved
+tasks sequentially, verify each task, and record concise evidence. Request an
+amendment before changing behavior, scope, architecture, interfaces, schemas,
+dependencies, compatibility, acceptance criteria, migrations, destructive
+behavior, or delivery outcomes. Repairs inside the approved envelope may
+continue.
+
+When delegation would materially help, load
+`references/adaptive-orchestration.md`; otherwise perform the role contracts
+locally and sequentially. Load `references/protocol.md`, `references/schemas.md`,
+and the role contract only when their detail is needed. Use
+`cassor run-report` for observed, non-persistent run metrics; unavailable
+telemetry remains unavailable.

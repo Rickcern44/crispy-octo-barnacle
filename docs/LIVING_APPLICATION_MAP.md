@@ -107,6 +107,25 @@ The recommended first delivery is **Feature dossier foundation**. It creates
 the durable capability record that makes the application map, guided authoring,
 and agent contributions coherent.
 
+## Capability and change boundary
+
+Cassor keeps `Capability`, `Change`, and `Gap` as distinct feature types. A
+delivery change may be linked explicitly to an enduring capability with a
+typed change-of dossier link. A capability can therefore receive multiple
+changes without replacing its prior delivery history.
+
+Current product truth is stored on the capability and refreshed only through
+an explicitly accepted state update sourced from a completed linked change.
+Those updates are append-only, so prior accepted states remain traceable.
+Discovery and other agents may record attributed dossier artifacts as `Draft`,
+but drafts cannot approve plans, complete work, or become canonical product
+truth until the orchestrator explicitly accepts them with evidence.
+
+The CLI and generated roadmap expose these as complementary projections:
+capabilities describe current truth, changes describe intended or delivered
+work, and gaps describe known missing behavior. SQLite remains authoritative;
+the context JSON and static site are derived views.
+
 ## Intended lifecycle
 
 ```text

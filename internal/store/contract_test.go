@@ -195,7 +195,10 @@ func TestLegacyMigrationLeavesMissingContractUnresolved(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range names[:len(names)-2] {
+	for _, name := range names {
+		if filepath.Base(name) == "0011_delivery_contract.sql" || filepath.Base(name) == "0012_delivery_contract_indexes.sql" || filepath.Base(name) == "0013_capability_change_dossier.sql" {
+			continue
+		}
 		source, err := migrations.Files.ReadFile(name)
 		if err != nil {
 			t.Fatal(err)

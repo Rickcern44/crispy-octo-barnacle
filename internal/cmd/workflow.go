@@ -134,7 +134,7 @@ func itemCommand() *cobra.Command {
 	start := itemTransitionCommand("start", "In Progress")
 	complete := itemTransitionCommand("complete", "Done")
 	cancel := itemTransitionCommand("cancel", "Won’t Do")
-	command.AddCommand(add, list, show, update, itemMetadataCommand(), relationshipCommand(), lifecycleCommand(), ready, start, complete, cancel)
+	command.AddCommand(add, list, show, update, itemMetadataCommand(), relationshipCommand(), changeLinkCommand(), artifactCommand(), stateCommand(), lifecycleCommand(), ready, start, complete, cancel)
 	return command
 }
 func itemMetadataCommand() *cobra.Command {
@@ -246,7 +246,158 @@ func updateItemCommand() *cobra.Command {
 	command.Flags().StringVar(&horizon, "horizon", "", "Now, Next, or Later")
 	command.Flags().StringVar(&rationale, "rationale", "", "item rationale")
 	command.Flags().StringVar(&featureType, "feature-type", "", "Capability, Change, or Gap")
-	command.Flags().StringVar(&currentState, "current-state", "", "current product behavior and limitations")
+	command.Flags().StringVar(&currentState, "current-state", "", "deprecated; accept state through item state accept")
+	return command
+}
+
+func changeLinkCommand() *cobra.Command {
+	command := &cobra.Command{Use: "change-link", Short: "Link delivery changes to enduring capabilities"}
+	var changeID, capabilityID int64
+	add := &cobra.Command{Use: "add", RunE: func(command *cobra.Command, _ []string) error {
+		database, err := databaseForCommand()
+		if err != nil {
+			return err
+		}
+		defer database.Close()
+		value, err := store.AddFeatureChangeLink(database, changeID, capabilityID)
+		if err != nil {
+			return err
+		}
+		return output(command, value, false)
+	}}
+	add.Flags().Int64Var(&changeID, "change", 0, "Change item ID")
+	add.Flags().Int64Var(&capabilityID, "capability", 0, "Capability item ID")
+	_ = add.MarkFlagRequired("change")
+	_ = add.MarkFlagRequired("capability")
+	var itemID int64
+	var asJSON bool
+	list := &cobra.Command{Use: "list", RunE: func(command *cobra.Command, _ []string) error {
+		database, err := databaseForCommand()
+		if err != nil {
+			return err
+		}
+		defer database.Close()
+		values, err := store.ListFeatureChangeLinks(database, itemID)
+		if err != nil {
+			return err
+		}
+		return output(command, values, asJSON)
+	}}
+	list.Flags().Int64Var(&itemID, "item", 0, "feature item ID")
+	list.Flags().BoolVar(&asJSON, "json", false, "emit JSON")
+	_ = list.MarkFlagRequired("item")
+	command.AddCommand(add, list)
+	return command
+}
+
+func artifactCommand() *cobra.Command {
+	command := &cobra.Command{Use: "artifact", Short: "Manage attributed dossier findings"}
+	var itemID int64
+	var kind, authorRole, summary, evidence string
+	var supersedesID int64
+	add := &cobra.Command{Use: "add", RunE: func(command *cobra.Command, _ []string) error {
+		database, err := databaseForCommand()
+		if err != nil {
+			return err
+		}
+		defer database.Close()
+		var supersedes *int64
+		if supersedesID > 0 {
+			supersedes = &supersedesID
+		}
+		value, err := store.AddDossierArtifact(database, itemID, kind, authorRole, summary, evidence, supersedes)
+		if err != nil {
+			return err
+		}
+		return output(command, value, false)
+	}}
+	add.Flags().Int64Var(&itemID, "item", 0, "feature item ID")
+	add.Flags().StringVar(&kind, "kind", "", "artifact kind")
+	add.Flags().StringVar(&authorRole, "author-role", "", "contributing role")
+	add.Flags().StringVar(&summary, "summary", "", "compact finding")
+	add.Flags().StringVar(&evidence, "evidence", "", "supporting evidence")
+	add.Flags().Int64Var(&supersedesID, "supersedes", 0, "prior artifact ID")
+	for _, flag := range []string{"item", "kind", "author-role", "summary"} {
+		_ = add.MarkFlagRequired(flag)
+	}
+	var artifactID int64
+	var acceptedBy string
+	accept := &cobra.Command{Use: "accept", RunE: func(command *cobra.Command, _ []string) error {
+		database, err := databaseForCommand()
+		if err != nil {
+			return err
+		}
+		defer database.Close()
+		if err := store.AcceptDossierArtifact(database, artifactID, acceptedBy); err != nil {
+			return err
+		}
+		_, err = fmt.Fprintf(command.OutOrStdout(), "Artifact %d accepted\n", artifactID)
+		return err
+	}}
+	accept.Flags().Int64Var(&artifactID, "artifact", 0, "artifact ID")
+	accept.Flags().StringVar(&acceptedBy, "by", "", "accepting orchestrator")
+	_ = accept.MarkFlagRequired("artifact")
+	_ = accept.MarkFlagRequired("by")
+	var asJSON bool
+	list := &cobra.Command{Use: "list", RunE: func(command *cobra.Command, _ []string) error {
+		database, err := databaseForCommand()
+		if err != nil {
+			return err
+		}
+		defer database.Close()
+		values, err := store.ListDossierArtifactsForItem(database, itemID)
+		if err != nil {
+			return err
+		}
+		return output(command, values, asJSON)
+	}}
+	list.Flags().Int64Var(&itemID, "item", 0, "feature item ID")
+	list.Flags().BoolVar(&asJSON, "json", false, "emit JSON")
+	_ = list.MarkFlagRequired("item")
+	command.AddCommand(add, accept, list)
+	return command
+}
+
+func stateCommand() *cobra.Command {
+	command := &cobra.Command{Use: "state", Short: "Accept capability product state updates"}
+	var capabilityID, sourceChangeID int64
+	var state, acceptedBy string
+	accept := &cobra.Command{Use: "accept", RunE: func(command *cobra.Command, _ []string) error {
+		database, err := databaseForCommand()
+		if err != nil {
+			return err
+		}
+		defer database.Close()
+		if err := store.AcceptCapabilityState(database, capabilityID, sourceChangeID, state, acceptedBy); err != nil {
+			return err
+		}
+		_, err = fmt.Fprintf(command.OutOrStdout(), "Capability %d state accepted\n", capabilityID)
+		return err
+	}}
+	accept.Flags().Int64Var(&capabilityID, "capability", 0, "Capability item ID")
+	accept.Flags().Int64Var(&sourceChangeID, "source-change", 0, "completed Change item ID")
+	accept.Flags().StringVar(&state, "state", "", "accepted current product state")
+	accept.Flags().StringVar(&acceptedBy, "by", "", "accepting orchestrator")
+	for _, flag := range []string{"capability", "source-change", "state", "by"} {
+		_ = accept.MarkFlagRequired(flag)
+	}
+	var asJSON bool
+	list := &cobra.Command{Use: "list", RunE: func(command *cobra.Command, _ []string) error {
+		database, err := databaseForCommand()
+		if err != nil {
+			return err
+		}
+		defer database.Close()
+		values, err := store.ListCapabilityStateHistoryForItem(database, capabilityID)
+		if err != nil {
+			return err
+		}
+		return output(command, values, asJSON)
+	}}
+	list.Flags().Int64Var(&capabilityID, "capability", 0, "Capability item ID")
+	list.Flags().BoolVar(&asJSON, "json", false, "emit JSON")
+	_ = list.MarkFlagRequired("capability")
+	command.AddCommand(accept, list)
 	return command
 }
 

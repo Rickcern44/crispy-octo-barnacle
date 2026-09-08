@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rickcern44/cassor/internal/config"
 	"github.com/rickcern44/cassor/internal/store"
@@ -23,15 +24,19 @@ const (
 )
 
 type roadmapData struct {
-	ProjectName   string                      `json:"project_name"`
-	Items         []store.Item                `json:"items"`
-	Plans         []planView                  `json:"plans"`
-	Tasks         []store.Task                `json:"tasks"`
-	Reports       []store.FeatureReport       `json:"reports"`
-	Phases        []store.PhaseRecord         `json:"phases"`
-	Criteria      []store.AcceptanceCriterion `json:"criteria"`
-	Relationships []store.FeatureRelationship `json:"relationships"`
-	Completed     []store.Task                `json:"completed_tasks"`
+	GeneratedAt      string                        `json:"generated_at"`
+	ProjectName      string                        `json:"project_name"`
+	Items            []store.Item                  `json:"items"`
+	Plans            []planView                    `json:"plans"`
+	Tasks            []store.Task                  `json:"tasks"`
+	Reports          []store.FeatureReport         `json:"reports"`
+	Phases           []store.PhaseRecord           `json:"phases"`
+	Criteria         []store.AcceptanceCriterion   `json:"criteria"`
+	Relationships    []store.FeatureRelationship   `json:"relationships"`
+	ChangeLinks      []store.FeatureChangeLink     `json:"change_links"`
+	CapabilityStates []store.CapabilityStateRecord `json:"capability_state_history"`
+	Artifacts        []store.DossierArtifact       `json:"dossier_artifacts"`
+	Completed        []store.Task                  `json:"completed_tasks"`
 }
 
 type planView struct {
@@ -57,6 +62,7 @@ func Build(repositoryRoot, stateDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	data.GeneratedAt = time.Now().UTC().Format(time.RFC3339)
 	encoded, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return "", err
@@ -110,20 +116,31 @@ func Validate(stateDir string) error {
 
 func writeGuides(repositoryRoot string) error {
 	guidesRoot := filepath.Join(repositoryRoot, sourceGuidesDirectory)
-	if err := os.RemoveAll(guidesRoot); err != nil {
-		return fmt.Errorf("clear generated guide routes: %w", err)
+	if err := os.MkdirAll(guidesRoot, 0o755); err != nil {
+		return fmt.Errorf("create generated guide routes: %w", err)
 	}
 	for source, slug := range map[string]string{
 		"CASSOR_CODEX_HANDOFF.md":      "project-handoff",
 		"CASSOR_PLAN_PACKET_SCHEMA.md": "plan-packet-schema",
 		"CASSOR_SKILLS_SPEC.md":        "skills-specification",
 		"LIVING_APPLICATION_MAP.md":    "living-application-map",
+		"CASSOR_RECOVERY.md":            "recovery",
+		"CASSOR_CONTEXT_CONTRACT.md":    "context-contract",
+		"SDD_LITE_MIGRATION_POLICY.md":  "migration-policy",
+		"GETTING_STARTED.md":             "getting-started",
+		"WORKFLOW_GUIDE.md":              "workflow",
+		"RESUME_WORK.md":                 "resume-work",
+		"ROADMAP_GUIDE.md":               "roadmap-guide",
 	} {
 		content, err := os.ReadFile(filepath.Join(repositoryRoot, "docs", source))
 		if err != nil {
 			return fmt.Errorf("read %s: %w", source, err)
 		}
-		output := filepath.Join(guidesRoot, slug, "+page.md")
+		guideDirectory := filepath.Join(guidesRoot, slug)
+		if err := os.RemoveAll(guideDirectory); err != nil {
+			return fmt.Errorf("clear generated guide route: %w", err)
+		}
+		output := filepath.Join(guideDirectory, "+page.md")
 		if err := os.MkdirAll(filepath.Dir(output), 0o755); err != nil {
 			return fmt.Errorf("create guide route directory: %w", err)
 		}
@@ -152,7 +169,7 @@ func loadData(database *sql.DB, projectName string) (roadmapData, error) {
 	if err != nil {
 		return roadmapData{}, err
 	}
-	rows, err := database.Query(`SELECT p.id,p.roadmap_item_id,p.revision,p.content,p.status,p.created_at,p.approved_at,p.approval_note,i.title FROM plan_revisions p JOIN roadmap_items i ON i.id=p.roadmap_item_id ORDER BY p.roadmap_item_id,p.revision`)
+	rows, err := database.Query(`SELECT p.id,p.roadmap_item_id,p.revision,p.content,p.status,p.active,p.created_at,p.approved_at,p.approval_note,i.title FROM plan_revisions p JOIN roadmap_items i ON i.id=p.roadmap_item_id ORDER BY p.roadmap_item_id,p.revision`)
 	if err != nil {
 		return roadmapData{}, err
 	}
@@ -160,7 +177,7 @@ func loadData(database *sql.DB, projectName string) (roadmapData, error) {
 	plans := []planView{}
 	for rows.Next() {
 		var view planView
-		if err := rows.Scan(&view.ID, &view.ItemID, &view.Revision, &view.Content, &view.Status, &view.CreatedAt, &view.ApprovedAt, &view.ApprovalNote, &view.ItemTitle); err != nil {
+		if err := rows.Scan(&view.ID, &view.ItemID, &view.Revision, &view.Content, &view.Status, &view.Active, &view.CreatedAt, &view.ApprovedAt, &view.ApprovalNote, &view.ItemTitle); err != nil {
 			return roadmapData{}, err
 		}
 		plans = append(plans, view)
@@ -200,6 +217,18 @@ func loadData(database *sql.DB, projectName string) (roadmapData, error) {
 	if err != nil {
 		return roadmapData{}, err
 	}
+	changeLinks, err := store.ListAllFeatureChangeLinks(database)
+	if err != nil {
+		return roadmapData{}, err
+	}
+	capabilityStates, err := store.ListCapabilityStateHistory(database)
+	if err != nil {
+		return roadmapData{}, err
+	}
+	artifacts, err := store.ListDossierArtifacts(database)
+	if err != nil {
+		return roadmapData{}, err
+	}
 	completedRows, err := database.Query(`SELECT id,plan_revision_id,title,description,status,outcome,created_at,started_at,completed_at,blocked_at FROM tasks WHERE status='Done' ORDER BY completed_at DESC,id DESC`)
 	if err != nil {
 		return roadmapData{}, err
@@ -213,7 +242,7 @@ func loadData(database *sql.DB, projectName string) (roadmapData, error) {
 		}
 		completed = append(completed, task)
 	}
-	return roadmapData{ProjectName: projectName, Items: items, Plans: plans, Tasks: tasks, Reports: reports, Phases: phases, Criteria: criteria, Relationships: relationships, Completed: completed}, completedRows.Err()
+	return roadmapData{ProjectName: projectName, Items: items, Plans: plans, Tasks: tasks, Reports: reports, Phases: phases, Criteria: criteria, Relationships: relationships, ChangeLinks: changeLinks, CapabilityStates: capabilityStates, Artifacts: artifacts, Completed: completed}, completedRows.Err()
 }
 
 func renderSources(data roadmapData, repositoryRoot string) (map[string][]byte, error) {
@@ -227,6 +256,13 @@ func renderSources(data roadmapData, repositoryRoot string) (map[string][]byte, 
 			"CASSOR_PLAN_PACKET_SCHEMA.md": "guides/plan-packet-schema.md",
 			"CASSOR_SKILLS_SPEC.md":        "guides/skills-specification.md",
 			"LIVING_APPLICATION_MAP.md":    "guides/living-application-map.md",
+			"CASSOR_RECOVERY.md":            "guides/recovery.md",
+			"CASSOR_CONTEXT_CONTRACT.md":    "guides/context-contract.md",
+			"SDD_LITE_MIGRATION_POLICY.md":  "guides/migration-policy.md",
+			"GETTING_STARTED.md":             "guides/getting-started.md",
+			"WORKFLOW_GUIDE.md":              "guides/workflow.md",
+			"RESUME_WORK.md":                 "guides/resume-work.md",
+			"ROADMAP_GUIDE.md":               "guides/roadmap-guide.md",
 		} {
 			content, err := os.ReadFile(filepath.Join(repositoryRoot, "docs", source))
 			if err != nil {

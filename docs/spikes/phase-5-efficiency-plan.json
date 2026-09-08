@@ -1,0 +1,99 @@
+{
+  "roadmap_item": {
+    "title": "Simplify Cassor skills and measure orchestration efficiency",
+    "description": "Keep Cassor guidance lightweight for ordinary work, load runtime-specific delegation details on demand, and measure comparable workflow efficiency without persisting transcripts.",
+    "category": "Needed",
+    "horizon": "Now",
+    "rationale": "The core delivery contract, bounded context, portability, and capability dossier are now established; the skill layer should minimize unnecessary context and make efficiency claims evidence-based."
+  },
+  "goal": "Cassor skills provide proportionate, runtime-neutral workflow guidance with on-demand delegation details and a reproducible efficiency benchmark that reports only observed metrics.",
+  "scope": {
+    "included": [
+      "Runtime-neutral entry skill guidance for lifecycle, authority, approval, amendment, and completion gates",
+      "On-demand adaptive orchestration reference for capability detection and model routing",
+      "Removal of duplicated instructions across the entry skill, protocol, and skills specification",
+      "Lightweight guidance for small local changes without weakening CLI-enforced gates",
+      "Static skill/reference validation and installer coverage",
+      "Comparable benchmark scenarios for small fixes, features, amendments, and resumed tasks",
+      "Aggregate benchmark reporting outside canonical SQLite state"
+    ],
+    "excluded": [
+      "New runtime adapters or worker integrations",
+      "Changes to Cassor lifecycle authority or persisted workflow semantics",
+      "Persisting raw transcripts, hidden reasoning, or benchmark telemetry in SQLite",
+      "Claims about worker-model or token efficiency when the runtime does not expose those metrics"
+    ]
+  },
+  "decisions": [
+    "SKILL.md remains the concise entry point; detailed dispatch policy lives in references/adaptive-orchestration.md and is loaded only when delegation is useful.",
+    "The protocol remains the authority reference; repeated policy text is removed from other documents rather than weakening the approval and worker-safety rules.",
+    "The CLI remains the only authority for persisted transitions; lightweight guidance may omit proportionate artifacts but never approval, amendment, or verification gates.",
+    "Benchmark scenarios use fixed fixtures and comparable successful outcomes; elapsed time, calls, output size, and repair effort are recorded only when observed, while unavailable token or worker metrics remain explicitly unavailable.",
+    "Aggregate benchmark results are retained as a reviewed repository document under docs/spikes and never written to canonical Cassor state."
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "proportionate-workflow",
+      "title": "Small local changes have a documented lightweight path that preserves execution readiness, amendment, and completion gates."
+    },
+    {
+      "id": "on-demand-runtime-details",
+      "title": "The entry skill does not require runtime-specific dispatch or model-routing details for every task; those details are available through an explicit reference."
+    },
+    {
+      "id": "consistent-contract",
+      "title": "The portable skill, protocol, specification, and installed assets consistently direct agents to the Cassor CLI for legal state transitions."
+    },
+    {
+      "id": "evidence-based-efficiency",
+      "title": "Four representative benchmark scenarios produce comparable successful outcomes and report observed efficiency metrics without fabricating unavailable telemetry or persisting raw transcripts."
+    }
+  ],
+  "constraints": [
+    "Preserve the seven lifecycle phases as guidance.",
+    "Preserve centralized user interaction, explicit approval, bounded implementation authority, and independent verification boundaries.",
+    "Keep portable skill installation and embedded assets deterministic.",
+    "Do not add runtime-specific behavior that cannot be verified by the current Codex runtime."
+  ],
+  "tasks": [
+    {
+      "title": "Refactor the entry skill and add on-demand orchestration guidance",
+      "description": "Reduce SKILL.md to runtime-neutral workflow guidance, add the adaptive-orchestration reference, and preserve the full capability fallback and worker-safety contract.",
+      "verification": [
+        "go test ./internal/skills ./internal/config",
+        "go test ./..."
+      ]
+    },
+    {
+      "title": "Simplify protocol documentation and validate proportionate paths",
+      "description": "Remove duplicated instructions across the portable protocol and skills specification, document lightweight small-change handling, and add static checks for references, frontmatter, and CLI authority wording.",
+      "verification": [
+        "go test ./internal/skills ./...",
+        "go vet ./..."
+      ]
+    },
+    {
+      "title": "Build the representative efficiency benchmark",
+      "description": "Create fixed benchmark scenarios for a small fix, feature, amendment, and resumed task; measure successful outcome, observed calls, elapsed time, output size, repair effort, and unavailable telemetry without persisting raw runs.",
+      "verification": [
+        "go test ./...",
+        "go run . run-report --mode single-agent --elapsed 1ms --verification passed --json"
+      ]
+    },
+    {
+      "title": "Verify installed assets and record benchmark findings",
+      "description": "Exercise deterministic skill installation and stale-file protection, run the benchmark and full repository checks, update the skills specification and aggregate benchmark report, and confirm Cassor state remains valid.",
+      "verification": [
+        "go test ./...",
+        "go vet ./...",
+        "go run . check"
+      ]
+    }
+  ],
+  "risks": [
+    "Removing duplicated text can accidentally hide an authority rule; static tests must require links to the canonical protocol and role contracts.",
+    "The current runtime does not expose safe worker isolation or token telemetry, so the benchmark must report those dimensions as unavailable rather than infer them.",
+    "Generated installed assets and documentation projections can drift unless the embedded installer tests and deterministic build checks are updated together."
+  ],
+  "open_questions": []
+}

@@ -26,18 +26,21 @@ type CriterionEvidence struct {
 // PortableState contains supported logical state in deterministic primary-key
 // order. It intentionally excludes schema metadata and generated site files.
 type PortableState struct {
-	Format            string                `json:"format"`
-	Version           int                   `json:"version"`
-	Categories        []Category            `json:"categories"`
-	Items             []Item                `json:"items"`
-	Plans             []Plan                `json:"plans"`
-	Tasks             []Task                `json:"tasks"`
-	PhaseRecords      []PhaseRecord         `json:"phase_records"`
-	Criteria          []AcceptanceCriterion `json:"criteria"`
-	CriterionEvidence []CriterionEvidence   `json:"criterion_evidence"`
-	TaskEvents        []TaskEvent           `json:"task_events"`
-	Relationships     []FeatureRelationship `json:"relationships"`
-	Reports           []FeatureReport       `json:"reports"`
+	Format            string                  `json:"format"`
+	Version           int                     `json:"version"`
+	Categories        []Category              `json:"categories"`
+	Items             []Item                  `json:"items"`
+	Plans             []Plan                  `json:"plans"`
+	Tasks             []Task                  `json:"tasks"`
+	PhaseRecords      []PhaseRecord           `json:"phase_records"`
+	Criteria          []AcceptanceCriterion   `json:"criteria"`
+	CriterionEvidence []CriterionEvidence     `json:"criterion_evidence"`
+	TaskEvents        []TaskEvent             `json:"task_events"`
+	Relationships     []FeatureRelationship   `json:"relationships"`
+	ChangeLinks       []FeatureChangeLink     `json:"change_links"`
+	CapabilityStates  []CapabilityStateRecord `json:"capability_state_history"`
+	Artifacts         []DossierArtifact       `json:"dossier_artifacts"`
+	Reports           []FeatureReport         `json:"reports"`
 }
 
 func ExportState(database *sql.DB) ([]byte, error) {
@@ -68,6 +71,15 @@ func ExportState(database *sql.DB) ([]byte, error) {
 		return nil, err
 	}
 	if state.Relationships, err = ListAllFeatureRelationships(database); err != nil {
+		return nil, err
+	}
+	if state.ChangeLinks, err = ListAllFeatureChangeLinks(database); err != nil {
+		return nil, err
+	}
+	if state.CapabilityStates, err = ListCapabilityStateHistory(database); err != nil {
+		return nil, err
+	}
+	if state.Artifacts, err = ListDossierArtifacts(database); err != nil {
 		return nil, err
 	}
 	if state.Reports, err = ListFeatureReports(database); err != nil {
@@ -130,6 +142,15 @@ func ImportState(database *sql.DB, data []byte) error {
 		return err
 	}
 	if err := importRelationships(transaction, state.Relationships); err != nil {
+		return err
+	}
+	if err := importChangeLinks(transaction, state.ChangeLinks); err != nil {
+		return err
+	}
+	if err := importCapabilityStates(transaction, state.CapabilityStates); err != nil {
+		return err
+	}
+	if err := importArtifacts(transaction, state.Artifacts); err != nil {
 		return err
 	}
 	if err := importReports(transaction, state.Reports); err != nil {
@@ -260,6 +281,39 @@ func validatePortableState(state PortableState) error {
 			return fmt.Errorf("relationship %d references missing item", relationship.ID)
 		}
 	}
+	itemValues := map[int64]Item{}
+	for _, item := range state.Items {
+		itemValues[item.ID] = item
+	}
+	for _, link := range state.ChangeLinks {
+		if !items[link.ChangeItemID] || !items[link.CapabilityItemID] {
+			return fmt.Errorf("change link %d references missing item", link.ID)
+		}
+		if itemValues[link.ChangeItemID].FeatureType != "Change" || itemValues[link.CapabilityItemID].FeatureType != "Capability" {
+			return fmt.Errorf("change link %d must connect a Change to a Capability", link.ID)
+		}
+	}
+	for _, stateRecord := range state.CapabilityStates {
+		if !items[stateRecord.CapabilityItemID] {
+			return fmt.Errorf("capability state %d references missing capability %d", stateRecord.ID, stateRecord.CapabilityItemID)
+		}
+		if stateRecord.SourceChangeID != nil && !items[*stateRecord.SourceChangeID] {
+			return fmt.Errorf("capability state %d references missing change %d", stateRecord.ID, *stateRecord.SourceChangeID)
+		}
+	}
+	artifacts := map[int64]bool{}
+	for _, artifact := range state.Artifacts {
+		if artifacts[artifact.ID] {
+			return fmt.Errorf("duplicate artifact ID %d", artifact.ID)
+		}
+		if !items[artifact.ItemID] {
+			return fmt.Errorf("artifact %d references missing item %d", artifact.ID, artifact.ItemID)
+		}
+		if artifact.SupersedesID != nil && !artifacts[*artifact.SupersedesID] {
+			return fmt.Errorf("artifact %d references missing prior artifact %d", artifact.ID, *artifact.SupersedesID)
+		}
+		artifacts[artifact.ID] = true
+	}
 	for _, report := range state.Reports {
 		if !items[report.ItemID] {
 			return fmt.Errorf("report %d references missing item %d", report.ID, report.ItemID)
@@ -269,7 +323,7 @@ func validatePortableState(state PortableState) error {
 }
 
 func ensureEmptyDestination(transaction *sql.Tx, state PortableState) error {
-	for _, table := range []string{"roadmap_items", "plan_revisions", "tasks", "feature_phase_records", "acceptance_criteria", "criterion_evidence", "task_events", "feature_relationships", "feature_reports"} {
+	for _, table := range []string{"roadmap_items", "plan_revisions", "tasks", "feature_phase_records", "acceptance_criteria", "criterion_evidence", "task_events", "feature_relationships", "feature_change_links", "capability_state_history", "dossier_artifacts", "feature_reports"} {
 		var count int
 		if err := transaction.QueryRow(`SELECT COUNT(*) FROM ` + table).Scan(&count); err != nil {
 			return err
@@ -378,6 +432,41 @@ func importRelationships(transaction *sql.Tx, values []FeatureRelationship) erro
 	for _, value := range values {
 		if _, err := transaction.Exec(`INSERT INTO feature_relationships(id,source_item_id,target_item_id,relationship_type,created_at) VALUES(?,?,?,?,?)`, value.ID, value.SourceItemID, value.TargetItemID, value.RelationshipType, value.CreatedAt); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+func importChangeLinks(transaction *sql.Tx, values []FeatureChangeLink) error {
+	for _, value := range values {
+		if _, err := transaction.Exec(`INSERT INTO feature_change_links(id,change_item_id,capability_item_id,created_at) VALUES(?,?,?,?)`, value.ID, value.ChangeItemID, value.CapabilityItemID, value.CreatedAt); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func importCapabilityStates(transaction *sql.Tx, values []CapabilityStateRecord) error {
+	for _, value := range values {
+		var source any
+		if value.SourceChangeID != nil {
+			source = *value.SourceChangeID
+		}
+		if _, err := transaction.Exec(`INSERT INTO capability_state_history(id,capability_item_id,source_change_item_id,state,accepted_by,accepted_at,created_at) VALUES(?,?,?,?,?,?,?)`, value.ID, value.CapabilityItemID, source, value.State, value.AcceptedBy, value.AcceptedAt, value.CreatedAt); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func importArtifacts(transaction *sql.Tx, values []DossierArtifact) error {
+	for _, value := range values {
+		if _, err := transaction.Exec(`INSERT INTO dossier_artifacts(id,roadmap_item_id,kind,author_role,status,summary,evidence,supersedes_id,created_at,accepted_at,accepted_by) VALUES(?,?,?,?,?,?,?,NULL,?,?,?)`, value.ID, value.ItemID, value.Kind, value.AuthorRole, value.Status, value.Summary, value.Evidence, value.CreatedAt, value.AcceptedAt, value.AcceptedBy); err != nil {
+			return err
+		}
+	}
+	for _, value := range values {
+		if value.SupersedesID != nil {
+			if _, err := transaction.Exec(`UPDATE dossier_artifacts SET supersedes_id=? WHERE id=?`, *value.SupersedesID, value.ID); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

@@ -199,12 +199,12 @@ func TestFeatureDossierFieldsAndRelationshipsAreValidated(t *testing.T) {
 	if capability.FeatureType != "Change" || capability.CurrentState != "" {
 		t.Fatalf("new item dossier defaults = %#v", capability)
 	}
-	featureType, currentState := "Capability", "Password login and session renewal are supported."
-	updated, err := UpdateItemDossier(database, capability.ID, &featureType, &currentState)
+	featureType := "Capability"
+	updated, err := UpdateItemDossier(database, capability.ID, &featureType, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.FeatureType != featureType || updated.CurrentState != currentState {
+	if updated.FeatureType != featureType || updated.CurrentState != "" {
 		t.Fatalf("dossier update = %#v", updated)
 	}
 	invalidType := "Unknown"

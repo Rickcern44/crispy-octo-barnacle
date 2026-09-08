@@ -20,7 +20,7 @@ func TestBuildGeneratesDeterministicFeatureRoutes(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, "docs"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"CASSOR_CODEX_HANDOFF.md", "CASSOR_PLAN_PACKET_SCHEMA.md", "CASSOR_SKILLS_SPEC.md", "LIVING_APPLICATION_MAP.md"} {
+	for _, name := range []string{"CASSOR_CODEX_HANDOFF.md", "CASSOR_PLAN_PACKET_SCHEMA.md", "CASSOR_SKILLS_SPEC.md", "LIVING_APPLICATION_MAP.md", "CASSOR_RECOVERY.md", "CASSOR_CONTEXT_CONTRACT.md", "SDD_LITE_MIGRATION_POLICY.md", "GETTING_STARTED.md", "WORKFLOW_GUIDE.md", "RESUME_WORK.md", "ROADMAP_GUIDE.md"} {
 		if err := os.WriteFile(filepath.Join(root, "docs", name), []byte("# "+name+"\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -40,8 +40,8 @@ func TestBuildGeneratesDeterministicFeatureRoutes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	featureType, currentState := "Capability", "Static routes are published as generated documentation."
-	if _, err := store.UpdateItemDossier(database, item.ID, &featureType, &currentState); err != nil {
+	featureType := "Capability"
+	if _, err := store.UpdateItemDossier(database, item.ID, &featureType, nil); err != nil {
 		t.Fatal(err)
 	}
 	related, err := store.AddItem(database, "Route search", "", "Needed", "Next", "")
@@ -49,6 +49,9 @@ func TestBuildGeneratesDeterministicFeatureRoutes(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := store.AddFeatureRelationship(database, related.ID, item.ID, "extends"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.AddFeatureChangeLink(database, related.ID, item.ID); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.TransitionItemStatus(database, item.ID, "Ready"); err != nil {
@@ -86,8 +89,11 @@ func TestBuildGeneratesDeterministicFeatureRoutes(t *testing.T) {
 	if !strings.Contains(string(initial), "Generate task history") {
 		t.Fatal("roadmap data does not include feature task history")
 	}
-	if !strings.Contains(string(initial), "Static routes are published as generated documentation.") || !strings.Contains(string(initial), "extends") {
+	if !strings.Contains(string(initial), "Capability") || !strings.Contains(string(initial), "extends") {
 		t.Fatal("roadmap data does not include dossier fields and relationships")
+	}
+	if !strings.Contains(string(initial), "change_links") {
+		t.Fatal("roadmap data does not include capability change links")
 	}
 	guide, err := os.ReadFile(filepath.Join(root, sourceGuidesDirectory, "project-handoff", "+page.md"))
 	if err != nil {

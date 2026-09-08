@@ -7,4 +7,5 @@ docs-site/.astro/
 docs-site/.svelte-kit/
 docs-site/src/content/
 docs-site/src/lib/generated/
-docs-site/src/routes/guides/
+docs-site/src/routes/guides/*
+!docs-site/src/routes/guides/+layout.svelte

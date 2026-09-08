@@ -1,42 +1,21 @@
-# sv
+# Cassor developer site
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+This SvelteKit workspace builds the static Cassor application map, roadmap, and documentation site. Cassor state remains authoritative; generated roadmap data and guide routes are projections.
 
-## Creating a project
-
-If you're seeing this, you've probably already done this step. Congrats!
+From the repository root:
 
 ```sh
-# create a new project
-npx sv create my-app
+go run . site build
 ```
 
-To recreate this project with the same configuration:
+For live UI work:
 
 ```sh
-# recreate this project
-npx sv@0.17.0 create --template minimal --types ts --add tailwindcss="plugins:none" mdsvex sveltekit-adapter="adapter:static" --no-download-check --no-install /private/tmp/cassor-svelte-site
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```sh
+cd docs-site
+npm install
 npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
 ```
 
-## Building
+The production build writes to `docs/roadmap/` and creates the Pagefind search index. Set `SITE_BASE=/cassor` when the site is hosted below a repository path.
 
-To create a production version of your app:
-
-```sh
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+Useful checks are `npm run check`, `npm run lint`, `npm run build`, and `npm run ci`.
