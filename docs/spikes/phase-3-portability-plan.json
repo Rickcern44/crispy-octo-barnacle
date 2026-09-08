@@ -1,0 +1,62 @@
+{
+  "roadmap_item": {
+    "title": "Establish Cassor recovery and collaboration semantics",
+    "description": "Make SQLite state portable through deterministic versioned export/import with explicit conflict behavior and checkout ownership rules.",
+    "category": "Needed",
+    "horizon": "Now",
+    "rationale": "The ignored local database needs a safe backup and transfer path before more stateful projections are added."
+  },
+  "goal": "Users can back up and restore complete supported Cassor logical state with deterministic exports and transactional failure behavior.",
+  "scope": {
+    "included": [
+      "Versioned deterministic JSON export of supported logical tables",
+      "Transactional import preserving IDs, relationships, approvals, criteria, evidence, events, and reports",
+      "Format validation, corrupt input rejection, and existing-state conflict rejection",
+      "CLI export and import commands",
+      "Recovery procedure and branch/worktree ownership documentation"
+    ],
+    "excluded": [
+      "Remote synchronization or merge algorithms",
+      "Automatic sharing of state between worktrees",
+      "Generated roadmap files as an authoritative import source"
+    ]
+  },
+  "decisions": [
+    "SQLite in each checkout's .cassor directory is authoritative; Git branches and worktrees do not automatically share state.",
+    "Import targets an initialized empty database and rejects logical conflicts rather than guessing merges.",
+    "Export format version 1 uses stable table order and primary-key order with no runtime timestamps added during export."
+  ],
+  "acceptance_criteria": [
+    "Export/import into a fresh database preserves supported logical state and relationships.",
+    "Equivalent state produces byte-identical deterministic exports.",
+    "Invalid, incompatible, or conflicting imports fail without partially modifying the destination.",
+    "Users have documented recovery and explicit branch/worktree behavior."
+  ],
+  "constraints": [
+    "Retain SQLite as the live authority.",
+    "Never persist transcripts or hidden reasoning in the export.",
+    "Preserve approval history, verification history, blocking history, and stable identifiers."
+  ],
+  "tasks": [
+    {
+      "title": "Implement deterministic logical state export",
+      "description": "Serialize supported Cassor tables in stable order with an explicit format version and no generated values.",
+      "verification": ["go test ./internal/store ./internal/cmd"]
+    },
+    {
+      "title": "Implement transactional validated import",
+      "description": "Validate format, references, and empty-destination conflicts before atomically restoring all supported records.",
+      "verification": ["go test ./internal/store ./internal/cmd"]
+    },
+    {
+      "title": "Add recovery CLI and document checkout ownership",
+      "description": "Expose export/import commands and document backup, recovery, generated-roadmap boundaries, and branch/worktree semantics.",
+      "verification": ["go test ./...", "go vet ./...", "cassor check"]
+    }
+  ],
+  "risks": [
+    "Future schema changes can make an export incompatible; the version must fail clearly until a compatible importer exists.",
+    "Importing into a non-empty state may need merge semantics later; rejecting conflicts keeps restoration predictable for version 1."
+  ],
+  "open_questions": []
+}
