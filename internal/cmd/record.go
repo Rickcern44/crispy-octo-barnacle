@@ -40,7 +40,11 @@ func recordPlanCommand() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		return output(command, recorded, asJSON)
+		if asJSON {
+			return output(command, recorded, true)
+		}
+		_, err = fmt.Fprintf(command.OutOrStdout(), "Plan %d revision %d approved and active for item %d; tasks: %d; next: cassor context --item %d --role implementation --max-bytes 12000\n", recorded.Plan.ID, recorded.Plan.Revision, recorded.Plan.ItemID, len(recorded.Tasks), recorded.Plan.ItemID)
+		return err
 	}}
 	command.Flags().StringVar(&path, "file", "", "path to a plan-packet JSON file")
 	command.Flags().BoolVar(&approve, "approve", false, "record this approved plan revision")

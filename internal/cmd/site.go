@@ -18,12 +18,31 @@ import (
 
 func newContextCommand() *cobra.Command {
 	var asJSON bool
+	var itemID int64
+	var role string
+	var maxBytes int
 	command := &cobra.Command{Use: "context", Short: "Show compact active Cassor context", RunE: func(command *cobra.Command, _ []string) error {
 		database, err := databaseForCommand()
 		if err != nil {
 			return err
 		}
 		defer database.Close()
+		if itemID > 0 {
+			context, err := store.BuildScopedContext(database, itemID, role, maxBytes)
+			if err != nil {
+				return err
+			}
+			if asJSON {
+				encoded, err := json.Marshal(context)
+				if err != nil {
+					return err
+				}
+				_, err = command.OutOrStdout().Write(encoded)
+				return err
+			}
+			_, err = fmt.Fprintf(command.OutOrStdout(), "Item %d · %s\nPlan %d revision %d · %s\nNext: %s\nContext bytes: %d/%d · truncated: %t\n", context.Item.ID, context.Item.Title, context.Assignment.PlanID, context.Assignment.Revision, context.Role, context.NextAction.Command, context.Bytes, context.MaxBytes, context.Truncated)
+			return err
+		}
 		context, err := store.CompactContext(database)
 		if err != nil {
 			return err
@@ -37,6 +56,9 @@ func newContextCommand() *cobra.Command {
 		return err
 	}}
 	command.Flags().BoolVar(&asJSON, "json", false, "emit JSON")
+	command.Flags().Int64Var(&itemID, "item", 0, "roadmap item ID for scoped context")
+	command.Flags().StringVar(&role, "role", "implementation", "scoped role: implementation, verification, or planning")
+	command.Flags().IntVar(&maxBytes, "max-bytes", 12000, "maximum encoded bytes for scoped context")
 	return command
 }
 

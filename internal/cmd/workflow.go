@@ -472,7 +472,11 @@ func taskCommand() *cobra.Command {
 		if err := store.ResumeTask(database, value); err != nil {
 			return err
 		}
-		_, err = fmt.Fprintf(command.OutOrStdout(), "Task %d resumed\n", value)
+		task, err := store.GetTask(database, value)
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprintf(command.OutOrStdout(), "Task %d resumed; next: cassor task complete %d --outcome <result>\n", value, task.ID)
 		return err
 	}}
 	command.AddCommand(add, list, show, start, complete, block, resume)
@@ -498,7 +502,23 @@ func taskTransitionCommand(use, status string, needsOutcome bool) *cobra.Command
 		if err := store.SetTaskStatus(database, value, status, outcome); err != nil {
 			return err
 		}
-		_, err = fmt.Fprintf(command.OutOrStdout(), "Task %d %s\n", value, strings.ToLower(status))
+		task, err := store.GetTask(database, value)
+		if err != nil {
+			return err
+		}
+		plan, err := store.GetPlan(database, task.PlanID)
+		if err != nil {
+			return err
+		}
+		next := fmt.Sprintf("cassor task show %d", value)
+		if status == "In Progress" {
+			next = fmt.Sprintf("cassor task complete %d --outcome <result>", value)
+		} else if status == "Blocked" {
+			next = fmt.Sprintf("cassor task resume %d", value)
+		} else if status == "Done" {
+			next = fmt.Sprintf("cassor context --item %d --role verification --max-bytes 12000", plan.ItemID)
+		}
+		_, err = fmt.Fprintf(command.OutOrStdout(), "Task %d %s; next: %s\n", value, strings.ToLower(status), next)
 		return err
 	}}
 	if needsOutcome {
