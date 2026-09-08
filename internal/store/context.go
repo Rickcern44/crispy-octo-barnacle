@@ -52,7 +52,7 @@ func itemsByStatus(database *sql.DB, status string) ([]Item, error) {
 }
 
 func plansByStatus(database *sql.DB, status string) ([]Plan, error) {
-	rows, err := database.Query(`SELECT id,roadmap_item_id,revision,content,status,created_at,approved_at,approval_note FROM plan_revisions WHERE status=? ORDER BY created_at, id`, status)
+	rows, err := database.Query(`SELECT id,roadmap_item_id,revision,content,status,active,created_at,approved_at,approval_note FROM plan_revisions WHERE status=? ORDER BY created_at, id`, status)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +69,7 @@ func plansByStatus(database *sql.DB, status string) ([]Plan, error) {
 }
 
 func tasksByStatus(database *sql.DB, status string, limit int) ([]Task, error) {
-	query := `SELECT id,plan_revision_id,title,description,status,outcome,created_at,started_at,completed_at,blocked_at FROM tasks WHERE status=? ORDER BY COALESCE(completed_at, blocked_at, started_at, created_at) DESC, id DESC`
+	query := `SELECT id,plan_revision_id,title,description,verification,status,outcome,created_at,started_at,completed_at,blocked_at FROM tasks WHERE status=? ORDER BY COALESCE(completed_at, blocked_at, started_at, created_at) DESC, id DESC`
 	arguments := []any{status}
 	if limit > 0 {
 		query += ` LIMIT ?`

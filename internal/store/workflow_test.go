@@ -33,6 +33,12 @@ func TestWorkflowEnforcesApprovalAndImmutablePlans(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := AddAcceptanceCriterionForPlan(database, plan.ID, "contract", "The work is complete", "", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Exec(`UPDATE tasks SET verification='["go test ./..."]' WHERE id=?`, task.ID); err != nil {
+		t.Fatal(err)
+	}
 	if err := SetTaskStatus(database, task.ID, "In Progress", ""); err == nil {
 		t.Fatal("SetTaskStatus() started task before plan approval")
 	}
@@ -103,6 +109,12 @@ func TestCompletionCandidatesRequireEveryApprovedTaskAndAnOpenItem(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := AddAcceptanceCriterionForPlan(database, completedPlan.ID, "done", "The task is complete", "", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Exec(`UPDATE tasks SET verification='["go test ./..."]' WHERE id=?`, completedTask.ID); err != nil {
+		t.Fatal(err)
+	}
 	if err := ApprovePlan(database, completedPlan.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -110,6 +122,13 @@ func TestCompletionCandidatesRequireEveryApprovedTaskAndAnOpenItem(t *testing.T)
 		t.Fatal(err)
 	}
 	if err := SetTaskStatus(database, completedTask.ID, "Done", "done"); err != nil {
+		t.Fatal(err)
+	}
+	criteria, err := ListAcceptanceCriteria(database)
+	if err != nil || len(criteria) != 1 {
+		t.Fatalf("criteria = %#v, err = %v", criteria, err)
+	}
+	if err := VerifyAcceptanceCriterion(database, criteria[0].ID, "Passed", "go test", "verified"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -125,6 +144,12 @@ func TestCompletionCandidatesRequireEveryApprovedTaskAndAnOpenItem(t *testing.T)
 		t.Fatal(err)
 	}
 	if _, err := AddTask(database, incompletePlan.ID, "Open task", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AddAcceptanceCriterionForPlan(database, incompletePlan.ID, "done", "The task is complete", "", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Exec(`UPDATE tasks SET verification='["go test ./..."]' WHERE plan_revision_id=?`, incompletePlan.ID); err != nil {
 		t.Fatal(err)
 	}
 	if err := ApprovePlan(database, incompletePlan.ID); err != nil {

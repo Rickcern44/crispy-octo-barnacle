@@ -93,6 +93,12 @@ func applyMigrations(database *sql.DB) error {
 			transaction.Rollback()
 			return fmt.Errorf("apply migration %s: %w", version, err)
 		}
+		if version == "0011_delivery_contract" {
+			if err := backfillDeliveryContract(transaction); err != nil {
+				transaction.Rollback()
+				return fmt.Errorf("backfill migration %s: %w", version, err)
+			}
+		}
 		if _, err := transaction.Exec(`INSERT INTO schema_migrations(version, applied_at) VALUES(?, ?)`, version, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 			transaction.Rollback()
 			return fmt.Errorf("record migration %s: %w", version, err)

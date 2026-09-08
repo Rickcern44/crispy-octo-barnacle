@@ -15,7 +15,7 @@ func TestRecordApprovedPlanIsAtomicAndPreservesApprovalEvidence(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer database.Close()
-	packet := PlanPacket{RoadmapItem: PacketRoadmapItem{Title: "Skills", Category: "Needed", Horizon: "Now"}, Goal: "Install the skills layer", Tasks: []PacketTask{{Title: "Add protocol", Verification: []string{"go test ./..."}}}}
+	packet := PlanPacket{RoadmapItem: PacketRoadmapItem{Title: "Skills", Category: "Needed", Horizon: "Now"}, Goal: "Install the skills layer", AcceptanceCriteria: []PacketCriterion{{ID: "contract", Title: "The skill is installable"}}, Tasks: []PacketTask{{Title: "Add protocol", Verification: []string{"go test ./..."}}}}
 	recorded, err := RecordApprovedPlan(database, packet, "Approved in Codex")
 	if err != nil {
 		t.Fatal(err)

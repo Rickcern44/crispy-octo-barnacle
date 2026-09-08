@@ -83,7 +83,27 @@ func TestRunAcceptsCompletedItemWithApprovedPlan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := store.AddAcceptanceCriterionForPlan(database, plan.ID, "done", "The item is complete", "", true); err != nil {
+		t.Fatal(err)
+	}
+	task, err := store.AddTask(database, plan.ID, "Task", "", []string{"go test ./..."})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := store.ApprovePlan(database, plan.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetTaskStatus(database, task.ID, "In Progress", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetTaskStatus(database, task.ID, "Done", "verified"); err != nil {
+		t.Fatal(err)
+	}
+	criteria, err := store.ListAcceptanceCriteria(database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.VerifyAcceptanceCriterion(database, criteria[0].ID, "Passed", "go test", "verified"); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.TransitionItemStatus(database, item.ID, "In Progress"); err != nil {

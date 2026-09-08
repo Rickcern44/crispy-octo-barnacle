@@ -29,6 +29,7 @@ func NewRootCommand() *cobra.Command {
 	command.AddCommand(newInitCommand())
 	command.AddCommand(newMigrateCommand())
 	addWorkflowCommands(command)
+	command.AddCommand(lifecycleCommand())
 	command.AddCommand(newContextCommand(), newSiteCommand())
 	command.AddCommand(newAuditCommand())
 	command.AddCommand(newCheckCommand())

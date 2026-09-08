@@ -19,7 +19,9 @@ The packet is JSON. It must have a non-empty `goal`, no `open_questions`, and at
     "excluded": ["Claude and Copilot adapters"]
   },
   "decisions": ["Project scope is the default."],
-  "acceptance_criteria": ["The installer is idempotent."],
+  "acceptance_criteria": [
+    {"id": "install-safe", "title": "The installer is idempotent."}
+  ],
   "constraints": ["No overwrite without explicit confirmation."],
   "tasks": [
     {
@@ -33,4 +35,4 @@ The packet is JSON. It must have a non-empty `goal`, no `open_questions`, and at
 }
 ```
 
-The optional `--approval-note` stores a brief approval record. Cassor stores the packet as immutable JSON but never stores conversation transcripts.
+Each criterion needs a stable `id` when an amendment must carry it forward; omitted IDs receive deterministic `C1`, `C2`, and so on. Criteria and task verification requirements are recorded in the same transaction as the approved plan. The optional `--approval-note` stores a brief approval record. Cassor stores the packet as immutable JSON but never stores conversation transcripts.

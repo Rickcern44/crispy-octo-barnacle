@@ -103,12 +103,18 @@ func foreignKeyCheck(database *sql.DB) error {
 func workflowCheck(database *sql.DB) error {
 	checks := []struct{ query, message string }{
 		{`SELECT COUNT(*) FROM plan_revisions p JOIN roadmap_items i ON i.id=p.roadmap_item_id WHERE p.status='Approved' AND (p.approved_at IS NULL OR i.status NOT IN ('Ready','In Progress','Done'))`, "approved plans must belong to active or completed items and have approval timestamps"},
+		{`SELECT COUNT(*) FROM plan_revisions WHERE active=1 AND status<>'Approved'`, "only approved plan revisions may be active"},
+		{`SELECT COUNT(*) FROM roadmap_items i JOIN plan_revisions p ON p.roadmap_item_id=i.id AND p.active=1 WHERE i.status IN ('Ready','In Progress') AND (SELECT COUNT(*) FROM acceptance_criteria c WHERE c.plan_revision_id=p.id AND trim(c.title)<>'')=0`, "active executable plans need meaningful acceptance criteria"},
+		{`SELECT COUNT(*) FROM roadmap_items i JOIN plan_revisions p ON p.roadmap_item_id=i.id AND p.active=1 JOIN tasks t ON t.plan_revision_id=p.id WHERE i.status IN ('Ready','In Progress') AND (trim(t.verification)='' OR trim(t.verification)='[]')`, "active executable tasks need verification requirements"},
 		{`SELECT COUNT(*) FROM plan_revisions WHERE status='Draft' AND approved_at IS NOT NULL`, "draft plans cannot have approval timestamps"},
 		{`SELECT COUNT(*) FROM tasks t JOIN plan_revisions p ON p.id=t.plan_revision_id WHERE t.status IN ('In Progress','Done','Blocked') AND p.status!='Approved'`, "started, done, and blocked tasks must belong to approved plans"},
 		{`SELECT COUNT(*) FROM tasks WHERE status='To Do' AND (started_at IS NOT NULL OR completed_at IS NOT NULL OR blocked_at IS NOT NULL)`, "to-do tasks cannot have lifecycle timestamps"},
 		{`SELECT COUNT(*) FROM tasks WHERE status='In Progress' AND started_at IS NULL`, "in-progress tasks need a start timestamp"},
 		{`SELECT COUNT(*) FROM tasks WHERE status='Done' AND (started_at IS NULL OR completed_at IS NULL OR outcome='')`, "done tasks need start, completion, and outcome data"},
 		{`SELECT COUNT(*) FROM tasks WHERE status='Blocked' AND (started_at IS NULL OR blocked_at IS NULL OR outcome='')`, "blocked tasks need start, block, and outcome data"},
+		{`SELECT COUNT(*) FROM tasks t LEFT JOIN task_events e ON e.task_id=t.id AND e.status='Blocked' WHERE t.status='Blocked' AND e.id IS NULL`, "blocked tasks need a blocking history event"},
+		{`SELECT COUNT(*) FROM acceptance_criteria WHERE status IN ('Passed','Failed','Waived') AND (verified_at IS NULL OR trim(evidence)='')`, "verified criteria need timestamps and evidence"},
+		{`SELECT COUNT(*) FROM acceptance_criteria WHERE status='Waived' AND (trim(waived_by)='' OR trim(waiver_reason)='')`, "waived criteria need attribution and a reason"},
 	}
 	for _, check := range checks {
 		var count int

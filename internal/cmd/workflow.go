@@ -402,6 +402,7 @@ func taskCommand() *cobra.Command {
 	command := &cobra.Command{Use: "task", Short: "Manage approved-plan tasks"}
 	var planID int64
 	var title, description string
+	var verification []string
 	add := &cobra.Command{Use: "add", RunE: func(command *cobra.Command, _ []string) error {
 		if err := required(title, "--title"); err != nil {
 			return err
@@ -411,7 +412,7 @@ func taskCommand() *cobra.Command {
 			return err
 		}
 		defer database.Close()
-		value, err := store.AddTask(database, planID, title, description)
+		value, err := store.AddTask(database, planID, title, description, verification)
 		if err != nil {
 			return err
 		}
@@ -420,6 +421,7 @@ func taskCommand() *cobra.Command {
 	add.Flags().Int64Var(&planID, "plan", 0, "plan ID")
 	add.Flags().StringVar(&title, "title", "", "task title")
 	add.Flags().StringVar(&description, "description", "", "task description")
+	add.Flags().StringSliceVar(&verification, "verification", nil, "required verification command or evidence reference (repeatable)")
 	var listPlan int64
 	var asJSON bool
 	list := &cobra.Command{Use: "list", RunE: func(command *cobra.Command, _ []string) error {
@@ -457,7 +459,23 @@ func taskCommand() *cobra.Command {
 	start := taskTransitionCommand("start", "In Progress", false)
 	complete := taskTransitionCommand("complete", "Done", true)
 	block := taskTransitionCommand("block", "Blocked", true)
-	command.AddCommand(add, list, show, start, complete, block)
+	resume := &cobra.Command{Use: "resume ID", Args: cobra.ExactArgs(1), RunE: func(command *cobra.Command, args []string) error {
+		value, err := id(args[0])
+		if err != nil {
+			return err
+		}
+		database, err := databaseForCommand()
+		if err != nil {
+			return err
+		}
+		defer database.Close()
+		if err := store.ResumeTask(database, value); err != nil {
+			return err
+		}
+		_, err = fmt.Fprintf(command.OutOrStdout(), "Task %d resumed\n", value)
+		return err
+	}}
+	command.AddCommand(add, list, show, start, complete, block, resume)
 	return command
 }
 func taskTransitionCommand(use, status string, needsOutcome bool) *cobra.Command {

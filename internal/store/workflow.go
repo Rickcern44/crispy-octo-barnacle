@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -48,21 +49,23 @@ type Plan struct {
 	Revision     int     `json:"revision"`
 	Content      string  `json:"content"`
 	Status       string  `json:"status"`
+	Active       bool    `json:"active"`
 	CreatedAt    string  `json:"created_at"`
 	ApprovedAt   *string `json:"approved_at,omitempty"`
 	ApprovalNote string  `json:"approval_note,omitempty"`
 }
 type Task struct {
-	ID          int64   `json:"id"`
-	PlanID      int64   `json:"plan_id"`
-	Title       string  `json:"title"`
-	Description string  `json:"description"`
-	Status      string  `json:"status"`
-	Outcome     string  `json:"outcome"`
-	CreatedAt   string  `json:"created_at"`
-	StartedAt   *string `json:"started_at,omitempty"`
-	CompletedAt *string `json:"completed_at,omitempty"`
-	BlockedAt   *string `json:"blocked_at,omitempty"`
+	ID           int64    `json:"id"`
+	PlanID       int64    `json:"plan_id"`
+	Title        string   `json:"title"`
+	Description  string   `json:"description"`
+	Verification []string `json:"verification"`
+	Status       string   `json:"status"`
+	Outcome      string   `json:"outcome"`
+	CreatedAt    string   `json:"created_at"`
+	StartedAt    *string  `json:"started_at,omitempty"`
+	CompletedAt  *string  `json:"completed_at,omitempty"`
+	BlockedAt    *string  `json:"blocked_at,omitempty"`
 }
 
 func Open(path string) (*sql.DB, error) {
@@ -304,6 +307,13 @@ func TransitionItemStatus(database *sql.DB, id int64, status string) error {
 		if unresolved > 0 {
 			return fmt.Errorf("roadmap item has %d acceptance criteria that have not passed or been waived", unresolved)
 		}
+		openTasks, err := OpenTasksForActivePlan(database, id)
+		if err != nil {
+			return err
+		}
+		if openTasks > 0 {
+			return fmt.Errorf("roadmap item has %d active-plan tasks that are not done", openTasks)
+		}
 	}
 	result, err := database.Exec(`UPDATE roadmap_items SET status=?, updated_at=? WHERE id=? AND status=?`, status, now(), id, previous)
 	if err != nil {
@@ -323,11 +333,11 @@ func SetItemStatus(database *sql.DB, id int64, status string) error {
 
 func scanPlan(scanner interface{ Scan(...any) error }) (Plan, error) {
 	var value Plan
-	err := scanner.Scan(&value.ID, &value.ItemID, &value.Revision, &value.Content, &value.Status, &value.CreatedAt, &value.ApprovedAt, &value.ApprovalNote)
+	err := scanner.Scan(&value.ID, &value.ItemID, &value.Revision, &value.Content, &value.Status, &value.Active, &value.CreatedAt, &value.ApprovedAt, &value.ApprovalNote)
 	return value, err
 }
 func GetPlan(database *sql.DB, id int64) (Plan, error) {
-	value, err := scanPlan(database.QueryRow(`SELECT id,roadmap_item_id,revision,content,status,created_at,approved_at,approval_note FROM plan_revisions WHERE id=?`, id))
+	value, err := scanPlan(database.QueryRow(`SELECT id,roadmap_item_id,revision,content,status,active,created_at,approved_at,approval_note FROM plan_revisions WHERE id=?`, id))
 	if err == sql.ErrNoRows {
 		return value, fmt.Errorf("plan %d not found", id)
 	}
@@ -365,7 +375,110 @@ func RevisePlan(database *sql.DB, id int64, content string) (Plan, error) {
 	if previous.Status != "Approved" {
 		return Plan{}, fmt.Errorf("only approved plans may be revised")
 	}
-	return CreatePlan(database, previous.ItemID, content)
+	plan, err := CreatePlan(database, previous.ItemID, content)
+	if err != nil {
+		return Plan{}, err
+	}
+	if err := carryForwardCriteria(database, previous.ID, plan.ID); err != nil {
+		return Plan{}, err
+	}
+	if err := carryForwardTasks(database, previous.ID, plan.ID); err != nil {
+		return Plan{}, err
+	}
+	return GetPlan(database, plan.ID)
+}
+
+func carryForwardCriteria(database *sql.DB, previousPlanID, planID int64) error {
+	var itemID int64
+	if err := database.QueryRow(`SELECT roadmap_item_id FROM plan_revisions WHERE id=?`, planID).Scan(&itemID); err != nil {
+		return err
+	}
+	rows, err := database.Query(`SELECT criterion_key,title,description,required,status,verification_method,evidence,verified_at,waived_by,waiver_reason FROM acceptance_criteria WHERE plan_revision_id=? ORDER BY id`, previousPlanID)
+	if err != nil {
+		return err
+	}
+	values := []struct {
+		key, title, description, status, method, evidence, waivedBy, waiverReason string
+		required                                                                  bool
+		verifiedAt                                                                *string
+	}{}
+	for rows.Next() {
+		var key, title, description, status, method, evidence, waivedBy, waiverReason string
+		var required bool
+		var verifiedAt *string
+		if err := rows.Scan(&key, &title, &description, &required, &status, &method, &evidence, &verifiedAt, &waivedBy, &waiverReason); err != nil {
+			rows.Close()
+			return err
+		}
+		values = append(values, struct {
+			key, title, description, status, method, evidence, waivedBy, waiverReason string
+			required                                                                  bool
+			verifiedAt                                                                *string
+		}{key, title, description, status, method, evidence, waivedBy, waiverReason, required, verifiedAt})
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, value := range values {
+		if _, err := database.Exec(`INSERT INTO acceptance_criteria(roadmap_item_id,plan_revision_id,criterion_key,title,description,required,status,verification_method,evidence,verified_at,waived_by,waiver_reason) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`, itemID, planID, value.key, value.title, value.description, boolInt(value.required), value.status, value.method, value.evidence, value.verifiedAt, value.waivedBy, value.waiverReason); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validatePlanContract(transaction *sql.Tx, planID int64) error {
+	var criteria, tasks, incompleteTasks int
+	if err := transaction.QueryRow(`SELECT COUNT(*) FROM acceptance_criteria WHERE plan_revision_id=? AND trim(title)<>''`, planID).Scan(&criteria); err != nil {
+		return err
+	}
+	if criteria == 0 {
+		return fmt.Errorf("plan requires at least one meaningful acceptance criterion")
+	}
+	if err := transaction.QueryRow(`SELECT COUNT(*) FROM tasks WHERE plan_revision_id=?`, planID).Scan(&tasks); err != nil {
+		return err
+	}
+	if tasks == 0 {
+		return fmt.Errorf("plan requires at least one task")
+	}
+	if err := transaction.QueryRow(`SELECT COUNT(*) FROM tasks WHERE plan_revision_id=? AND verification='[]'`, planID).Scan(&incompleteTasks); err != nil {
+		return err
+	}
+	if incompleteTasks > 0 {
+		return fmt.Errorf("plan tasks require verification requirements")
+	}
+	return nil
+}
+
+func carryForwardTasks(database *sql.DB, previousPlanID, planID int64) error {
+	rows, err := database.Query(`SELECT title,description,verification FROM tasks WHERE plan_revision_id=? AND status<>'Done' ORDER BY id`, previousPlanID)
+	if err != nil {
+		return err
+	}
+	values := [][3]string{}
+	for rows.Next() {
+		var value [3]string
+		if err := rows.Scan(&value[0], &value[1], &value[2]); err != nil {
+			rows.Close()
+			return err
+		}
+		values = append(values, value)
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, value := range values {
+		if _, err := database.Exec(`INSERT INTO tasks(plan_revision_id,title,description,verification,created_at) VALUES(?,?,?,?,?)`, planID, value[0], value[1], value[2], now()); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 func ApprovePlan(database *sql.DB, id int64) error {
 	transaction, err := database.Begin()
@@ -394,14 +507,22 @@ func ApprovePlan(database *sql.DB, id int64) error {
 		transaction.Rollback()
 		return fmt.Errorf("only plans for ready or in-progress roadmap items may be approved")
 	}
-	if _, err := transaction.Exec(`UPDATE plan_revisions SET status='Approved', approved_at=? WHERE id=?`, now(), id); err != nil {
+	if err := validatePlanContract(transaction, id); err != nil {
+		transaction.Rollback()
+		return err
+	}
+	if _, err := transaction.Exec(`UPDATE plan_revisions SET active=0 WHERE roadmap_item_id=?`, itemID); err != nil {
+		transaction.Rollback()
+		return err
+	}
+	if _, err := transaction.Exec(`UPDATE plan_revisions SET status='Approved', active=1, approved_at=? WHERE id=?`, now(), id); err != nil {
 		transaction.Rollback()
 		return err
 	}
 	return transaction.Commit()
 }
 func ListPlans(database *sql.DB, itemID int64) ([]Plan, error) {
-	rows, err := database.Query(`SELECT id,roadmap_item_id,revision,content,status,created_at,approved_at,approval_note FROM plan_revisions WHERE roadmap_item_id=? ORDER BY revision`, itemID)
+	rows, err := database.Query(`SELECT id,roadmap_item_id,revision,content,status,active,created_at,approved_at,approval_note FROM plan_revisions WHERE roadmap_item_id=? ORDER BY revision`, itemID)
 	if err != nil {
 		return nil, err
 	}
@@ -419,17 +540,23 @@ func ListPlans(database *sql.DB, itemID int64) ([]Plan, error) {
 
 func scanTask(scanner interface{ Scan(...any) error }) (Task, error) {
 	var value Task
-	err := scanner.Scan(&value.ID, &value.PlanID, &value.Title, &value.Description, &value.Status, &value.Outcome, &value.CreatedAt, &value.StartedAt, &value.CompletedAt, &value.BlockedAt)
+	var verification string
+	err := scanner.Scan(&value.ID, &value.PlanID, &value.Title, &value.Description, &verification, &value.Status, &value.Outcome, &value.CreatedAt, &value.StartedAt, &value.CompletedAt, &value.BlockedAt)
+	if err == nil {
+		if decodeErr := json.Unmarshal([]byte(verification), &value.Verification); decodeErr != nil {
+			return value, fmt.Errorf("decode task verification: %w", decodeErr)
+		}
+	}
 	return value, err
 }
 func GetTask(database *sql.DB, id int64) (Task, error) {
-	value, err := scanTask(database.QueryRow(`SELECT id,plan_revision_id,title,description,status,outcome,created_at,started_at,completed_at,blocked_at FROM tasks WHERE id=?`, id))
+	value, err := scanTask(database.QueryRow(`SELECT id,plan_revision_id,title,description,verification,status,outcome,created_at,started_at,completed_at,blocked_at FROM tasks WHERE id=?`, id))
 	if err == sql.ErrNoRows {
 		return value, fmt.Errorf("task %d not found", id)
 	}
 	return value, err
 }
-func AddTask(database *sql.DB, planID int64, title, description string) (Task, error) {
+func AddTask(database *sql.DB, planID int64, title, description string, verificationValues ...[]string) (Task, error) {
 	plan, err := GetPlan(database, planID)
 	if err != nil {
 		return Task{}, err
@@ -437,7 +564,15 @@ func AddTask(database *sql.DB, planID int64, title, description string) (Task, e
 	if plan.Status != "Draft" {
 		return Task{}, fmt.Errorf("tasks can only be added to a draft plan")
 	}
-	result, err := database.Exec(`INSERT INTO tasks(plan_revision_id,title,description,created_at) VALUES(?,?,?,?)`, planID, title, description, now())
+	verification := []string{}
+	if len(verificationValues) > 0 {
+		verification = verificationValues[0]
+	}
+	encoded, err := json.Marshal(verification)
+	if err != nil {
+		return Task{}, err
+	}
+	result, err := database.Exec(`INSERT INTO tasks(plan_revision_id,title,description,verification,created_at) VALUES(?,?,?,?,?)`, planID, title, description, string(encoded), now())
 	if err != nil {
 		return Task{}, err
 	}
@@ -448,7 +583,7 @@ func AddTask(database *sql.DB, planID int64, title, description string) (Task, e
 	return GetTask(database, id)
 }
 func ListTasks(database *sql.DB, planID int64) ([]Task, error) {
-	rows, err := database.Query(`SELECT id,plan_revision_id,title,description,status,outcome,created_at,started_at,completed_at,blocked_at FROM tasks WHERE plan_revision_id=? ORDER BY id`, planID)
+	rows, err := database.Query(`SELECT id,plan_revision_id,title,description,verification,status,outcome,created_at,started_at,completed_at,blocked_at FROM tasks WHERE plan_revision_id=? ORDER BY id`, planID)
 	if err != nil {
 		return nil, err
 	}
@@ -464,6 +599,9 @@ func ListTasks(database *sql.DB, planID int64) ([]Task, error) {
 	return values, rows.Err()
 }
 func SetTaskStatus(database *sql.DB, id int64, status, outcome string) error {
+	if status != "In Progress" && status != "Done" && status != "Blocked" {
+		return fmt.Errorf("unsupported task status %q", status)
+	}
 	task, err := GetTask(database, id)
 	if err != nil {
 		return err
@@ -473,11 +611,12 @@ func SetTaskStatus(database *sql.DB, id int64, status, outcome string) error {
 			return fmt.Errorf("only pending tasks may start")
 		}
 		var planStatus string
-		if err := database.QueryRow(`SELECT status FROM plan_revisions WHERE id=?`, task.PlanID).Scan(&planStatus); err != nil {
+		var active bool
+		if err := database.QueryRow(`SELECT status,active FROM plan_revisions WHERE id=?`, task.PlanID).Scan(&planStatus, &active); err != nil {
 			return err
 		}
-		if planStatus != "Approved" {
-			return fmt.Errorf("tasks cannot start without an approved plan revision")
+		if planStatus != "Approved" || !active {
+			return fmt.Errorf("tasks cannot start without the active approved plan revision")
 		}
 	} else if task.Status != "In Progress" {
 		return fmt.Errorf("only active tasks may be %s", status)
@@ -497,6 +636,33 @@ func SetTaskStatus(database *sql.DB, id int64, status, outcome string) error {
 	}
 	query += ` WHERE id=?`
 	args = append(args, id)
-	_, err = database.Exec(query, args...)
+	if _, err = database.Exec(query, args...); err != nil {
+		return err
+	}
+	_, err = database.Exec(`INSERT INTO task_events(task_id,status,outcome,recorded_at) VALUES(?,?,?,?)`, id, status, outcome, timestamp)
+	return err
+}
+
+func ResumeTask(database *sql.DB, id int64) error {
+	task, err := GetTask(database, id)
+	if err != nil {
+		return err
+	}
+	if task.Status != "Blocked" {
+		return fmt.Errorf("only blocked tasks may resume")
+	}
+	var active bool
+	var planStatus string
+	if err := database.QueryRow(`SELECT status,active FROM plan_revisions WHERE id=?`, task.PlanID).Scan(&planStatus, &active); err != nil {
+		return err
+	}
+	if planStatus != "Approved" || !active {
+		return fmt.Errorf("tasks cannot resume without the active approved plan revision")
+	}
+	timestamp := now()
+	if _, err := database.Exec(`UPDATE tasks SET status='In Progress',started_at=? WHERE id=?`, timestamp, id); err != nil {
+		return err
+	}
+	_, err = database.Exec(`INSERT INTO task_events(task_id,status,outcome,recorded_at) VALUES(?,?,?,?)`, id, "In Progress", "resumed", timestamp)
 	return err
 }
