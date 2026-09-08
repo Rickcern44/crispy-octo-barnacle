@@ -2,6 +2,22 @@ import roadmap from "./generated/roadmap.json";
 
 export type Roadmap = typeof roadmap;
 export type Item = Roadmap["items"][number];
+export type Specification = {
+	title: string;
+	description: string;
+	done: boolean;
+};
+export type FeatureRelationship = {
+	id: number;
+	source_item_id: number;
+	source_item_title: string;
+	target_item_id: number;
+	target_item_title: string;
+	relationship_type: "extends" | "depends_on" | "replaces";
+	created_at: string;
+};
+
+const relationships: FeatureRelationship[] = roadmap.relationships;
 
 const planItemIDs = new Map(
 	roadmap.plans.map((plan) => [plan.id, plan.item_id]),
@@ -27,6 +43,25 @@ export function milestoneKind(item: Item) {
 	if (!milestoneDate(item)) return "unscheduled";
 	return item.status === "Done" ? "done" : "planned";
 }
+
+// Lifecycle completion is authoritative for presentation. Historical metadata
+// may retain a lower progress value after an item has been delivered.
+export function displayProgress(item: Item) {
+	return item.status === "Done" ? 100 : item.progress;
+}
+
+export function specificationsForItem(item: Item): Specification[] {
+	try {
+		const specifications = JSON.parse(item.specifications) as Specification[];
+		return Array.isArray(specifications) ? specifications : [];
+	} catch {
+		return [];
+	}
+}
+
+export const shippedFeatureCount = roadmap.items.filter(
+	(item) => item.status === "Done",
+).length;
 
 export const milestones = [...roadmap.items].sort((left, right) => {
 	const leftDate = milestoneDate(left);
@@ -56,6 +91,14 @@ export function lifecycleForItem(itemID: number) {
 			(criterion) => criterion.ItemID === itemID,
 		),
 	};
+}
+
+export function relationshipsForItem(itemID: number) {
+	return relationships.filter(
+		(relationship) =>
+			relationship.source_item_id === itemID ||
+			relationship.target_item_id === itemID,
+	);
 }
 
 export { roadmap };

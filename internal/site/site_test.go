@@ -20,7 +20,7 @@ func TestBuildGeneratesDeterministicFeatureRoutes(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, "docs"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"CASSOR_CODEX_HANDOFF.md", "CASSOR_PLAN_PACKET_SCHEMA.md", "CASSOR_SKILLS_SPEC.md"} {
+	for _, name := range []string{"CASSOR_CODEX_HANDOFF.md", "CASSOR_PLAN_PACKET_SCHEMA.md", "CASSOR_SKILLS_SPEC.md", "LIVING_APPLICATION_MAP.md"} {
 		if err := os.WriteFile(filepath.Join(root, "docs", name), []byte("# "+name+"\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -38,6 +38,17 @@ func TestBuildGeneratesDeterministicFeatureRoutes(t *testing.T) {
 	defer database.Close()
 	item, err := store.AddItem(database, "Document static routes", "Publish feature detail pages.", "Needed", "Now", "")
 	if err != nil {
+		t.Fatal(err)
+	}
+	featureType, currentState := "Capability", "Static routes are published as generated documentation."
+	if _, err := store.UpdateItemDossier(database, item.ID, &featureType, &currentState); err != nil {
+		t.Fatal(err)
+	}
+	related, err := store.AddItem(database, "Route search", "", "Needed", "Next", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.AddFeatureRelationship(database, related.ID, item.ID, "extends"); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.TransitionItemStatus(database, item.ID, "Ready"); err != nil {
@@ -75,11 +86,21 @@ func TestBuildGeneratesDeterministicFeatureRoutes(t *testing.T) {
 	if !strings.Contains(string(initial), "Generate task history") {
 		t.Fatal("roadmap data does not include feature task history")
 	}
+	if !strings.Contains(string(initial), "Static routes are published as generated documentation.") || !strings.Contains(string(initial), "extends") {
+		t.Fatal("roadmap data does not include dossier fields and relationships")
+	}
 	guide, err := os.ReadFile(filepath.Join(root, sourceGuidesDirectory, "project-handoff", "+page.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(guide), "CASSOR_CODEX_HANDOFF.md") {
 		t.Fatal("generated guide route does not include source documentation")
+	}
+	livingMapGuide, err := os.ReadFile(filepath.Join(root, sourceGuidesDirectory, "living-application-map", "+page.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(livingMapGuide), "LIVING_APPLICATION_MAP.md") {
+		t.Fatal("generated guide route does not include the living application map")
 	}
 }

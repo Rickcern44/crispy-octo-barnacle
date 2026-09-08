@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { base } from '$app/paths';
-	import { milestoneDate, milestoneKind, milestones, roadmap } from '$lib/roadmap';
+	import { milestoneDate, milestoneKind, milestones, roadmap, shippedFeatureCount } from '$lib/roadmap';
 
 	const scheduled = milestones.filter((item) => milestoneKind(item) !== 'unscheduled');
 	const unscheduled = milestones.filter((item) => milestoneKind(item) === 'unscheduled');
@@ -20,6 +20,7 @@
 			<a class="rounded-full bg-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300" href={`${base}/`}>Roadmap</a>
 			<a class="rounded-full border border-slate-600 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-cyan-400 hover:text-cyan-300" href={`${base}/guides/project-handoff/`}>Docs</a>
 		</nav>
+		<p class="mt-6 inline-flex rounded-full border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-300">🏁 {shippedFeatureCount} features shipped</p>
 	</header>
 
 	<section class="mt-14" aria-labelledby="timeline-title">
@@ -27,19 +28,20 @@
 			<h2 id="timeline-title" class="text-2xl font-bold text-white">Delivery timeline</h2>
 			<p class="text-sm text-slate-400">{scheduled.length} dated milestones</p>
 		</div>
-		<div class="relative mt-8 border-l border-slate-700 pl-7 sm:pl-10">
+		<div class="relative mt-8 border-l border-slate-700 pl-7 sm:pl-10 lg:border-l-0 lg:pl-0">
 			{#each scheduled as item, index}
-				<a class="group relative mb-7 block rounded-2xl border border-slate-800 bg-slate-900/70 p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-cyan-400 hover:bg-slate-900" href={`${base}/roadmap/rm-${item.id}/`}>
-					<span class={`absolute -left-[2.15rem] top-7 h-4 w-4 rounded-full border-4 border-cassor-950 ${milestoneKind(item) === 'done' ? 'bg-emerald-400' : 'bg-cyan-400'}`}></span>
+				<div class={`relative mb-4 lg:grid lg:grid-cols-[1fr_3rem_1fr] lg:items-center`}>
+					<span class={`absolute -left-[2.15rem] top-5 h-4 w-4 rounded-full border-4 border-cassor-950 ${milestoneKind(item) === 'done' ? 'bg-emerald-400' : 'bg-cyan-400'} lg:static lg:col-start-2 lg:row-start-1 lg:mx-auto`}></span>
+					<span class="absolute left-1/2 top-0 hidden h-full w-px -translate-x-1/2 bg-slate-700 lg:block"></span>
+					<a class={`group relative block rounded-xl border border-slate-800 bg-slate-900/70 p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-cyan-400 hover:bg-slate-900 lg:row-start-1 ${index % 2 === 0 ? 'lg:col-start-1 lg:text-right' : 'lg:col-start-3'}`} href={`${base}/roadmap/rm-${item.id}/`}>
 					<div class="flex flex-wrap items-center gap-x-4 gap-y-2">
 						<p class="text-sm font-semibold tracking-wider text-cyan-300">{milestoneDate(item)}</p>
 						<span class="text-xs font-medium uppercase tracking-wider text-slate-400">{milestoneKind(item) === 'done' ? 'Delivered' : 'Planned'} · RM-{item.id}</span>
 					</div>
 					<h3 class="mt-2 text-xl font-semibold text-white group-hover:text-cyan-200">{item.title}</h3>
-					<p class="mt-2 leading-6 text-slate-300">{item.description || item.rationale || 'Open feature detail'}</p>
-					<div class="mt-4 flex items-center justify-between text-sm text-slate-400"><span>{item.status}</span><span>{item.progress}% complete</span></div>
-					<div class="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800"><div class="h-full rounded-full bg-cyan-400" style={`width: ${item.progress}%`}></div></div>
+					<p class={`mt-3 text-sm font-semibold ${milestoneKind(item) === 'done' ? 'text-emerald-300' : 'text-cyan-300'}`}>{item.status}</p>
 				</a>
+				</div>
 			{/each}
 		</div>
 	</section>

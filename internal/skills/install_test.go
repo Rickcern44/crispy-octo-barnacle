@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/rickcern44/cassor/internal/config"
 )
 
 func TestVerifyManagedFileExplainsAvailableUpdate(t *testing.T) {
@@ -159,6 +161,9 @@ func TestCodexInstallDeliversAdaptiveDispatchPolicyFromEmbeddedAssets(t *testing
 			"Parallel workers are read-only.",
 			"Exactly one implementation worker; never concurrent implementation workers.",
 			"Perform the same role contracts sequentially in the orchestrator context.",
+			".cassor/agents.toml",
+			"gpt-5.6-sol",
+			"gpt-5.6-luna",
 		},
 		"references/protocol.md": {
 			"Treat an unknown capability as unavailable.",
@@ -189,5 +194,23 @@ func TestCodexInstallDeliversAdaptiveDispatchPolicyFromEmbeddedAssets(t *testing
 		if !bytes.Equal(installed, assets[path]) {
 			t.Errorf("installed %s differs from its embedded portable asset", path)
 		}
+	}
+}
+
+func TestDoctorWarnsWhenCodexRoutingIsMissing(t *testing.T) {
+	root := t.TempDir()
+	state := filepath.Join(root, ".cassor")
+	if err := os.Mkdir(state, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(config.AgentsPath(state), []byte("[models]\norchestrator = \"frontier\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	report, err := Doctor(root, state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Status != "warning" || len(report.Warnings) == 0 || !strings.Contains(strings.Join(report.Warnings, "\n"), "Codex model routing is incomplete") {
+		t.Fatalf("doctor report = %+v", report)
 	}
 }

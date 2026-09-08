@@ -30,6 +30,17 @@ type Item struct {
 	TechnicalSummary   string `json:"technical_summary"`
 	Specifications     string `json:"specifications"`
 	DocumentationLinks string `json:"documentation_links"`
+	FeatureType        string `json:"feature_type"`
+	CurrentState       string `json:"current_state"`
+}
+type FeatureRelationship struct {
+	ID               int64  `json:"id"`
+	SourceItemID     int64  `json:"source_item_id"`
+	SourceItemTitle  string `json:"source_item_title"`
+	TargetItemID     int64  `json:"target_item_id"`
+	TargetItemTitle  string `json:"target_item_title"`
+	RelationshipType string `json:"relationship_type"`
+	CreatedAt        string `json:"created_at"`
 }
 type Plan struct {
 	ID           int64   `json:"id"`
@@ -110,11 +121,11 @@ func AddItem(database *sql.DB, title, description, category, horizon, rationale 
 }
 func scanItem(scanner interface{ Scan(...any) error }) (Item, error) {
 	var value Item
-	err := scanner.Scan(&value.ID, &value.Title, &value.Description, &value.Category, &value.Horizon, &value.Status, &value.Rationale, &value.CreatedAt, &value.UpdatedAt, &value.TargetDate, &value.Progress, &value.Priority, &value.Complexity, &value.Team, &value.LeadEngineer, &value.TechnicalSummary, &value.Specifications, &value.DocumentationLinks)
+	err := scanner.Scan(&value.ID, &value.Title, &value.Description, &value.Category, &value.Horizon, &value.Status, &value.Rationale, &value.CreatedAt, &value.UpdatedAt, &value.TargetDate, &value.Progress, &value.Priority, &value.Complexity, &value.Team, &value.LeadEngineer, &value.TechnicalSummary, &value.Specifications, &value.DocumentationLinks, &value.FeatureType, &value.CurrentState)
 	return value, err
 }
 
-const itemColumns = `i.id, i.title, i.description, c.name, i.horizon, i.status, i.rationale, i.created_at, i.updated_at, i.target_date, i.progress, i.priority, i.complexity, i.team, i.lead_engineer, i.technical_summary, i.specifications, i.documentation_links FROM roadmap_items i JOIN categories c ON c.id=i.category_id`
+const itemColumns = `i.id, i.title, i.description, c.name, i.horizon, i.status, i.rationale, i.created_at, i.updated_at, i.target_date, i.progress, i.priority, i.complexity, i.team, i.lead_engineer, i.technical_summary, i.specifications, i.documentation_links, i.feature_type, i.current_state FROM roadmap_items i JOIN categories c ON c.id=i.category_id`
 
 func UpdateItemMetadata(database *sql.DB, id int64, targetDate string, progress int, priority, complexity, team, lead, summary, specs, links string) (Item, error) {
 	_, err := database.Exec(`UPDATE roadmap_items SET target_date=?,progress=?,priority=?,complexity=?,team=?,lead_engineer=?,technical_summary=?,specifications=?,documentation_links=?,updated_at=? WHERE id=?`, targetDate, progress, priority, complexity, team, lead, summary, specs, links, now(), id)
@@ -177,6 +188,104 @@ func UpdateItem(database *sql.DB, id int64, title, description, category, horizo
 	}
 	return GetItem(database, id)
 }
+
+func UpdateItemDossier(database *sql.DB, id int64, featureType, currentState *string) (Item, error) {
+	item, err := GetItem(database, id)
+	if err != nil {
+		return item, err
+	}
+	if featureType != nil {
+		if !validFeatureType(*featureType) {
+			return item, fmt.Errorf("unsupported feature type %q", *featureType)
+		}
+		item.FeatureType = *featureType
+	}
+	if currentState != nil {
+		item.CurrentState = *currentState
+	}
+	if _, err := database.Exec(`UPDATE roadmap_items SET feature_type=?,current_state=?,updated_at=? WHERE id=?`, item.FeatureType, item.CurrentState, now(), id); err != nil {
+		return item, err
+	}
+	return GetItem(database, id)
+}
+
+func AddFeatureRelationship(database *sql.DB, sourceItemID, targetItemID int64, relationshipType string) (FeatureRelationship, error) {
+	if !validRelationshipType(relationshipType) {
+		return FeatureRelationship{}, fmt.Errorf("unsupported relationship type %q", relationshipType)
+	}
+	if sourceItemID == targetItemID {
+		return FeatureRelationship{}, fmt.Errorf("a feature cannot relate to itself")
+	}
+	for _, itemID := range []int64{sourceItemID, targetItemID} {
+		if _, err := GetItem(database, itemID); err != nil {
+			return FeatureRelationship{}, err
+		}
+	}
+	var exists bool
+	if err := database.QueryRow(`SELECT EXISTS(SELECT 1 FROM feature_relationships WHERE source_item_id=? AND target_item_id=? AND relationship_type=?)`, sourceItemID, targetItemID, relationshipType).Scan(&exists); err != nil {
+		return FeatureRelationship{}, err
+	}
+	if exists {
+		return FeatureRelationship{}, fmt.Errorf("feature relationship already exists")
+	}
+	result, err := database.Exec(`INSERT INTO feature_relationships(source_item_id,target_item_id,relationship_type,created_at) VALUES(?,?,?,?)`, sourceItemID, targetItemID, relationshipType, now())
+	if err != nil {
+		return FeatureRelationship{}, fmt.Errorf("add feature relationship: %w", err)
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return FeatureRelationship{}, err
+	}
+	return getFeatureRelationship(database, id)
+}
+
+func ListFeatureRelationships(database *sql.DB, itemID int64) ([]FeatureRelationship, error) {
+	if _, err := GetItem(database, itemID); err != nil {
+		return nil, err
+	}
+	return featureRelationships(database, `WHERE r.source_item_id=? OR r.target_item_id=?`, itemID, itemID)
+}
+
+func ListAllFeatureRelationships(database *sql.DB) ([]FeatureRelationship, error) {
+	return featureRelationships(database, ``)
+}
+
+func getFeatureRelationship(database *sql.DB, id int64) (FeatureRelationship, error) {
+	values, err := featureRelationships(database, `WHERE r.id=?`, id)
+	if err != nil {
+		return FeatureRelationship{}, err
+	}
+	if len(values) == 0 {
+		return FeatureRelationship{}, fmt.Errorf("feature relationship %d not found", id)
+	}
+	return values[0], nil
+}
+
+func featureRelationships(database *sql.DB, where string, arguments ...any) ([]FeatureRelationship, error) {
+	query := `SELECT r.id,r.source_item_id,s.title,r.target_item_id,t.title,r.relationship_type,r.created_at FROM feature_relationships r JOIN roadmap_items s ON s.id=r.source_item_id JOIN roadmap_items t ON t.id=r.target_item_id ` + where + ` ORDER BY r.id`
+	rows, err := database.Query(query, arguments...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	values := []FeatureRelationship{}
+	for rows.Next() {
+		var value FeatureRelationship
+		if err := rows.Scan(&value.ID, &value.SourceItemID, &value.SourceItemTitle, &value.TargetItemID, &value.TargetItemTitle, &value.RelationshipType, &value.CreatedAt); err != nil {
+			return nil, err
+		}
+		values = append(values, value)
+	}
+	return values, rows.Err()
+}
+
+func validFeatureType(value string) bool {
+	return value == "Capability" || value == "Change" || value == "Gap"
+}
+
+func validRelationshipType(value string) bool {
+	return value == "extends" || value == "depends_on" || value == "replaces"
+}
 func TransitionItemStatus(database *sql.DB, id int64, status string) error {
 	previous, ok := map[string]string{
 		"Ready":       "Planned",
@@ -231,8 +340,8 @@ func CreatePlan(database *sql.DB, itemID int64, content string) (Plan, error) {
 	} else if err != nil {
 		return Plan{}, err
 	}
-	if status != "Ready" {
-		return Plan{}, fmt.Errorf("only ready roadmap items may receive plans")
+	if status != "Ready" && status != "In Progress" {
+		return Plan{}, fmt.Errorf("only ready or in-progress roadmap items may receive plans")
 	}
 	var revision int
 	if err := database.QueryRow(`SELECT COALESCE(MAX(revision),0)+1 FROM plan_revisions WHERE roadmap_item_id=?`, itemID).Scan(&revision); err != nil {
@@ -281,9 +390,9 @@ func ApprovePlan(database *sql.DB, id int64) error {
 		transaction.Rollback()
 		return err
 	}
-	if itemStatus != "Ready" {
+	if itemStatus != "Ready" && itemStatus != "In Progress" {
 		transaction.Rollback()
-		return fmt.Errorf("only plans for ready roadmap items may be approved")
+		return fmt.Errorf("only plans for ready or in-progress roadmap items may be approved")
 	}
 	if _, err := transaction.Exec(`UPDATE plan_revisions SET status='Approved', approved_at=? WHERE id=?`, now(), id); err != nil {
 		transaction.Rollback()

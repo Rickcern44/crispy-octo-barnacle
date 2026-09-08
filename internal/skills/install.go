@@ -13,6 +13,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/rickcern44/cassor/internal/config"
 	portable "github.com/rickcern44/cassor/skills/portable/cassor"
 )
 
@@ -296,6 +297,16 @@ func Doctor(repositoryRoot, stateDir string) (DoctorReport, error) {
 	}
 	if len(manifest.Installations) == 0 {
 		report.Warnings = append(report.Warnings, "no Cassor skills are installed")
+	}
+	agents, err := config.ReadAgents(config.AgentsPath(stateDir))
+	if err != nil {
+		report.Status = "warning"
+		report.Warnings = append(report.Warnings, "Codex model routing is unavailable: "+err.Error())
+	} else if err := config.ValidateCodexRouting(agents); err != nil {
+		report.Status = "warning"
+		report.Warnings = append(report.Warnings, "Codex model routing is incomplete: "+err.Error())
+	} else {
+		report.Checks = append(report.Checks, "Codex role-to-model routing is valid")
 	}
 	return report, nil
 }

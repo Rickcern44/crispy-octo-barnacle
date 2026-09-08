@@ -134,7 +134,7 @@ func itemCommand() *cobra.Command {
 	start := itemTransitionCommand("start", "In Progress")
 	complete := itemTransitionCommand("complete", "Done")
 	cancel := itemTransitionCommand("cancel", "Won’t Do")
-	command.AddCommand(add, list, show, update, itemMetadataCommand(), lifecycleCommand(), ready, start, complete, cancel)
+	command.AddCommand(add, list, show, update, itemMetadataCommand(), relationshipCommand(), lifecycleCommand(), ready, start, complete, cancel)
 	return command
 }
 func itemMetadataCommand() *cobra.Command {
@@ -189,13 +189,13 @@ func showItemCommand() *cobra.Command {
 	return command
 }
 func updateItemCommand() *cobra.Command {
-	var title, description, category, horizon, rationale string
+	var title, description, category, horizon, rationale, featureType, currentState string
 	command := &cobra.Command{Use: "update ID", Args: cobra.ExactArgs(1), RunE: func(command *cobra.Command, args []string) error {
 		value, err := id(args[0])
 		if err != nil {
 			return err
 		}
-		var t, d, c, h, r *string
+		var t, d, c, h, r, ft, cs *string
 		if command.Flags().Changed("title") {
 			t = &title
 		}
@@ -211,7 +211,13 @@ func updateItemCommand() *cobra.Command {
 		if command.Flags().Changed("rationale") {
 			r = &rationale
 		}
-		if t == nil && d == nil && c == nil && h == nil && r == nil {
+		if command.Flags().Changed("feature-type") {
+			ft = &featureType
+		}
+		if command.Flags().Changed("current-state") {
+			cs = &currentState
+		}
+		if t == nil && d == nil && c == nil && h == nil && r == nil && ft == nil && cs == nil {
 			return fmt.Errorf("provide an item field to update")
 		}
 		database, err := databaseForCommand()
@@ -219,9 +225,18 @@ func updateItemCommand() *cobra.Command {
 			return err
 		}
 		defer database.Close()
-		item, err := store.UpdateItem(database, value, t, d, c, h, r)
-		if err != nil {
-			return err
+		item, err := store.GetItem(database, value)
+		if t != nil || d != nil || c != nil || h != nil || r != nil {
+			item, err = store.UpdateItem(database, value, t, d, c, h, r)
+			if err != nil {
+				return err
+			}
+		}
+		if ft != nil || cs != nil {
+			item, err = store.UpdateItemDossier(database, value, ft, cs)
+			if err != nil {
+				return err
+			}
 		}
 		return output(command, item, false)
 	}}
@@ -230,6 +245,51 @@ func updateItemCommand() *cobra.Command {
 	command.Flags().StringVar(&category, "category", "", "category name")
 	command.Flags().StringVar(&horizon, "horizon", "", "Now, Next, or Later")
 	command.Flags().StringVar(&rationale, "rationale", "", "item rationale")
+	command.Flags().StringVar(&featureType, "feature-type", "", "Capability, Change, or Gap")
+	command.Flags().StringVar(&currentState, "current-state", "", "current product behavior and limitations")
+	return command
+}
+
+func relationshipCommand() *cobra.Command {
+	command := &cobra.Command{Use: "relationship", Short: "Manage directed feature relationships"}
+	var source, target int64
+	var relationshipType string
+	add := &cobra.Command{Use: "add", RunE: func(command *cobra.Command, _ []string) error {
+		database, err := databaseForCommand()
+		if err != nil {
+			return err
+		}
+		defer database.Close()
+		value, err := store.AddFeatureRelationship(database, source, target, relationshipType)
+		if err != nil {
+			return err
+		}
+		return output(command, value, false)
+	}}
+	add.Flags().Int64Var(&source, "from", 0, "source feature ID")
+	add.Flags().Int64Var(&target, "to", 0, "target feature ID")
+	add.Flags().StringVar(&relationshipType, "type", "", "extends, depends_on, or replaces")
+	_ = add.MarkFlagRequired("from")
+	_ = add.MarkFlagRequired("to")
+	_ = add.MarkFlagRequired("type")
+	var itemID int64
+	var asJSON bool
+	list := &cobra.Command{Use: "list", RunE: func(command *cobra.Command, _ []string) error {
+		database, err := databaseForCommand()
+		if err != nil {
+			return err
+		}
+		defer database.Close()
+		values, err := store.ListFeatureRelationships(database, itemID)
+		if err != nil {
+			return err
+		}
+		return output(command, values, asJSON)
+	}}
+	list.Flags().Int64Var(&itemID, "item", 0, "feature ID")
+	list.Flags().BoolVar(&asJSON, "json", false, "emit JSON")
+	_ = list.MarkFlagRequired("item")
+	command.AddCommand(add, list)
 	return command
 }
 func itemTransitionCommand(use, status string) *cobra.Command {

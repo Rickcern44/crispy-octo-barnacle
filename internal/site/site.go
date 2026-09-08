@@ -23,14 +23,15 @@ const (
 )
 
 type roadmapData struct {
-	ProjectName string                `json:"project_name"`
-	Items       []store.Item          `json:"items"`
-	Plans       []planView            `json:"plans"`
-	Tasks       []store.Task          `json:"tasks"`
-	Reports     []store.FeatureReport `json:"reports"`
-	Phases      []store.PhaseRecord `json:"phases"`
-	Criteria    []store.AcceptanceCriterion `json:"criteria"`
-	Completed   []store.Task          `json:"completed_tasks"`
+	ProjectName   string                      `json:"project_name"`
+	Items         []store.Item                `json:"items"`
+	Plans         []planView                  `json:"plans"`
+	Tasks         []store.Task                `json:"tasks"`
+	Reports       []store.FeatureReport       `json:"reports"`
+	Phases        []store.PhaseRecord         `json:"phases"`
+	Criteria      []store.AcceptanceCriterion `json:"criteria"`
+	Relationships []store.FeatureRelationship `json:"relationships"`
+	Completed     []store.Task                `json:"completed_tasks"`
 }
 
 type planView struct {
@@ -116,6 +117,7 @@ func writeGuides(repositoryRoot string) error {
 		"CASSOR_CODEX_HANDOFF.md":      "project-handoff",
 		"CASSOR_PLAN_PACKET_SCHEMA.md": "plan-packet-schema",
 		"CASSOR_SKILLS_SPEC.md":        "skills-specification",
+		"LIVING_APPLICATION_MAP.md":    "living-application-map",
 	} {
 		content, err := os.ReadFile(filepath.Join(repositoryRoot, "docs", source))
 		if err != nil {
@@ -186,8 +188,18 @@ func loadData(database *sql.DB, projectName string) (roadmapData, error) {
 	if err != nil {
 		return roadmapData{}, err
 	}
-	phases, err := store.ListPhaseRecords(database); if err != nil { return roadmapData{}, err }
-	criteria, err := store.ListAcceptanceCriteria(database); if err != nil { return roadmapData{}, err }
+	phases, err := store.ListPhaseRecords(database)
+	if err != nil {
+		return roadmapData{}, err
+	}
+	criteria, err := store.ListAcceptanceCriteria(database)
+	if err != nil {
+		return roadmapData{}, err
+	}
+	relationships, err := store.ListAllFeatureRelationships(database)
+	if err != nil {
+		return roadmapData{}, err
+	}
 	completedRows, err := database.Query(`SELECT id,plan_revision_id,title,description,status,outcome,created_at,started_at,completed_at,blocked_at FROM tasks WHERE status='Done' ORDER BY completed_at DESC,id DESC`)
 	if err != nil {
 		return roadmapData{}, err
@@ -201,7 +213,7 @@ func loadData(database *sql.DB, projectName string) (roadmapData, error) {
 		}
 		completed = append(completed, task)
 	}
-	return roadmapData{ProjectName: projectName, Items: items, Plans: plans, Tasks: tasks, Reports: reports, Phases: phases, Criteria: criteria, Completed: completed}, completedRows.Err()
+	return roadmapData{ProjectName: projectName, Items: items, Plans: plans, Tasks: tasks, Reports: reports, Phases: phases, Criteria: criteria, Relationships: relationships, Completed: completed}, completedRows.Err()
 }
 
 func renderSources(data roadmapData, repositoryRoot string) (map[string][]byte, error) {
@@ -214,6 +226,7 @@ func renderSources(data roadmapData, repositoryRoot string) (map[string][]byte, 
 			"CASSOR_CODEX_HANDOFF.md":      "guides/project-handoff.md",
 			"CASSOR_PLAN_PACKET_SCHEMA.md": "guides/plan-packet-schema.md",
 			"CASSOR_SKILLS_SPEC.md":        "guides/skills-specification.md",
+			"LIVING_APPLICATION_MAP.md":    "guides/living-application-map.md",
 		} {
 			content, err := os.ReadFile(filepath.Join(repositoryRoot, "docs", source))
 			if err != nil {

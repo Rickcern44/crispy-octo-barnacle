@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -56,6 +58,7 @@ func newSiteCommand() *cobra.Command {
 		return err
 	}})
 	var address string
+	var watch bool
 	serve := &cobra.Command{Use: "serve", Short: "Serve the generated roadmap locally", RunE: func(command *cobra.Command, _ []string) error {
 		root, _, err := currentProject()
 		if err != nil {
@@ -72,11 +75,68 @@ func newSiteCommand() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		return http.ListenAndServe(address, http.FileServer(http.Dir(directory)))
+		if !watch {
+			return http.ListenAndServe(address, http.FileServer(http.Dir(directory)))
+		}
+		var clients sync.Map
+		go watchRoadmap(root, filepath.Join(root, ".cassor", "cassor.db"), func() {
+			clients.Range(func(key, _ any) bool {
+				select {
+				case key.(chan struct{}) <- struct{}{}:
+				default:
+				}
+				return true
+			})
+		})
+		mux := http.NewServeMux()
+		mux.Handle("/", http.FileServer(http.Dir(directory)))
+		mux.HandleFunc("/__cassor_reload", func(writer http.ResponseWriter, request *http.Request) {
+			writer.Header().Set("Content-Type", "text/event-stream")
+			writer.Header().Set("Cache-Control", "no-cache")
+			writer.Header().Set("Connection", "keep-alive")
+			flusher, ok := writer.(http.Flusher)
+			if !ok {
+				http.Error(writer, "streaming unsupported", http.StatusInternalServerError)
+				return
+			}
+			channel := make(chan struct{}, 1)
+			clients.Store(channel, struct{}{})
+			defer clients.Delete(channel)
+			fmt.Fprint(writer, "data: connected\n\n")
+			flusher.Flush()
+			select {
+			case <-request.Context().Done():
+			case <-channel:
+				fmt.Fprint(writer, "data: reload\n\n")
+				flusher.Flush()
+			}
+		})
+		return http.ListenAndServe(address, mux)
 	}}
 	serve.Flags().StringVar(&address, "addr", "127.0.0.1:8080", "listen address")
+	serve.Flags().BoolVar(&watch, "watch", false, "rebuild and reload local browsers when Cassor state changes")
 	command.AddCommand(serve)
 	return command
+}
+
+func watchRoadmap(root, database string, reload func()) {
+	var previous time.Time
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		info, err := os.Stat(database)
+		if err != nil || !info.ModTime().After(previous) {
+			continue
+		}
+		previous = info.ModTime()
+		if state, err := project.FindStateDirectory(root); err == nil {
+			if _, err := site.Build(root, state); err == nil {
+				if _, err := site.Compile(root); err == nil {
+					reload()
+				}
+			}
+		}
+	}
 }
 
 func currentProject() (string, string, error) {

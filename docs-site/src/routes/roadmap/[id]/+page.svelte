@@ -1,13 +1,15 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import { page } from '$app/state';
-	import { lifecycleForItem, plansForItem, reportsForItem, roadmap } from '$lib/roadmap';
+	import { displayProgress, lifecycleForItem, plansForItem, relationshipsForItem, reportsForItem, roadmap, specificationsForItem } from '$lib/roadmap';
 
 	const itemID = Number((page.params.id ?? '').replace('rm-', ''));
 	const item = roadmap.items.find((candidate) => candidate.id === itemID);
 	const plans = plansForItem(itemID);
 	const reports = reportsForItem(itemID);
 	const lifecycle = lifecycleForItem(itemID);
+	const relationships = relationshipsForItem(itemID);
+	const specifications = item ? specificationsForItem(item) : [];
 </script>
 
 <svelte:head><title>{item ? `RM-${item.id} · ${item.title}` : 'Roadmap item'}</title></svelte:head>
@@ -15,9 +17,11 @@
 <main class="mx-auto max-w-4xl px-5 py-12 sm:px-8 lg:py-20">
 	<a class="text-sm font-semibold text-cyan-300 hover:text-cyan-200" href={`${base}/`}>← Back to roadmap</a>
 	{#if item}
-		<header class="mt-8 border-b border-slate-800 pb-8"><p class="text-sm font-semibold tracking-[0.18em] text-cyan-400">RM-{item.id} · {item.status}</p><h1 class="mt-3 text-4xl font-bold tracking-tight text-white sm:text-5xl">{item.title}</h1><p class="mt-5 text-lg leading-8 text-slate-300">{item.technical_summary || item.description || item.rationale}</p></header>
-		<section class="mt-9 grid gap-4 sm:grid-cols-2"><div class="rounded-xl border border-slate-800 bg-slate-900/70 p-5"><p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Delivery</p><dl class="mt-3 space-y-2 text-sm"><div class="flex justify-between gap-3"><dt class="text-slate-400">Progress</dt><dd>{item.progress}%</dd></div><div class="flex justify-between gap-3"><dt class="text-slate-400">Target</dt><dd>{item.target_date || 'Unscheduled'}</dd></div><div class="flex justify-between gap-3"><dt class="text-slate-400">Horizon</dt><dd>{item.horizon}</dd></div></dl></div><div class="rounded-xl border border-slate-800 bg-slate-900/70 p-5"><p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Ownership</p><dl class="mt-3 space-y-2 text-sm"><div class="flex justify-between gap-3"><dt class="text-slate-400">Team</dt><dd>{item.team || 'Unassigned'}</dd></div><div class="flex justify-between gap-3"><dt class="text-slate-400">Lead</dt><dd>{item.lead_engineer || 'Unassigned'}</dd></div><div class="flex justify-between gap-3"><dt class="text-slate-400">Priority</dt><dd>{item.priority || 'Unassigned'}</dd></div></dl></div></section>
-		{#if item.specifications}<section class="mt-9"><h2 class="text-2xl font-bold text-white">Technical specifications</h2><pre class="mt-4 overflow-x-auto rounded-xl border border-slate-800 bg-slate-900 p-5 text-sm text-slate-300">{item.specifications}</pre></section>{/if}
+		<header class="mt-8 border-b border-slate-800 pb-8"><p class="text-sm font-semibold tracking-[0.18em] text-cyan-400">RM-{item.id} · {item.feature_type} · {item.status}</p><h1 class="mt-3 text-4xl font-bold tracking-tight text-white sm:text-5xl">{item.title}</h1><p class="mt-5 text-lg leading-8 text-slate-300">{item.technical_summary || item.description || item.rationale}</p></header>
+		<section class="mt-9 grid gap-4 sm:grid-cols-2"><div class="rounded-xl border border-slate-800 bg-slate-900/70 p-5"><p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Delivery</p><dl class="mt-3 space-y-2 text-sm"><div class="flex justify-between gap-3"><dt class="text-slate-400">Progress</dt><dd>{displayProgress(item)}%</dd></div><div class="flex justify-between gap-3"><dt class="text-slate-400">Target</dt><dd>{item.target_date || 'Unscheduled'}</dd></div><div class="flex justify-between gap-3"><dt class="text-slate-400">Horizon</dt><dd>{item.horizon}</dd></div></dl></div><div class="rounded-xl border border-slate-800 bg-slate-900/70 p-5"><p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Ownership</p><dl class="mt-3 space-y-2 text-sm"><div class="flex justify-between gap-3"><dt class="text-slate-400">Team</dt><dd>{item.team || 'Unassigned'}</dd></div><div class="flex justify-between gap-3"><dt class="text-slate-400">Lead</dt><dd>{item.lead_engineer || 'Unassigned'}</dd></div><div class="flex justify-between gap-3"><dt class="text-slate-400">Priority</dt><dd>{item.priority || 'Unassigned'}</dd></div></dl></div></section>
+		<section class="mt-9 rounded-xl border border-slate-800 bg-slate-900/70 p-5"><p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Current product state</p><p class="mt-3 leading-7 text-slate-300">{item.current_state || 'Not yet documented.'}</p></section>
+		{#if relationships.length > 0}<section class="mt-9"><h2 class="text-2xl font-bold text-white">Feature relationships</h2><ul class="mt-4 space-y-3">{#each relationships as relationship}<li class="rounded-xl border border-slate-800 bg-slate-900/70 p-4"><a class="font-medium text-cyan-300 hover:text-cyan-200" href={`${base}/roadmap/rm-${relationship.source_item_id === itemID ? relationship.target_item_id : relationship.source_item_id}/`}>{relationship.source_item_id === itemID ? `${relationship.relationship_type} → ${relationship.target_item_title}` : `${relationship.source_item_title} → ${relationship.relationship_type}`}</a></li>{/each}</ul></section>{/if}
+		{#if specifications.length > 0}<section class="mt-9"><h2 class="text-2xl font-bold text-white">Technical specifications</h2><ul class="mt-4 space-y-2">{#each specifications as specification}<li class="rounded-lg border border-slate-800 bg-slate-900/70 p-3 text-sm text-slate-300"><span class={specification.done ? 'text-emerald-300' : 'text-cyan-300'}>{specification.done ? '✓' : '○'}</span> <span class="font-medium text-white">{specification.title}</span>{#if specification.description}<p class="mt-1 text-slate-400">{specification.description}</p>{/if}</li>{/each}</ul></section>{/if}
 		{#if plans.length > 0}
 			<section class="mt-9">
 				<h2 class="text-2xl font-bold text-white">Implementation history</h2>

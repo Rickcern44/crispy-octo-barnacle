@@ -8,7 +8,7 @@ Workers never ask the user questions, approve work, expand scope, persist specul
 
 ## Adaptive Codex dispatch
 
-Before dispatch, the orchestrator records a transient capability assessment for the current Codex runtime: subagents, parallel execution, isolated worker contexts, compact structured returns, and explicit worker-model routing. Treat an unknown capability as unavailable. Do not claim a worker model, isolated context, parallelism, structured return, metric, or telemetry that the runtime has not exposed.
+Before dispatch, the orchestrator reads `.cassor/agents.toml` and records a transient capability assessment for the current Codex runtime: subagents, parallel execution, isolated worker contexts, compact structured returns, and explicit worker-model routing. Treat an unknown capability as unavailable. Do not claim a worker model, isolated context, parallelism, structured return, metric, or telemetry that the runtime has not exposed.
 
 Dispatch is justified only when the work is both independent and bounded, and specialization or concurrency materially improves the result. Keep small, local, sequentially dependent, or tightly coupled work in the orchestrator context. Use this decision policy:
 
@@ -18,7 +18,7 @@ Dispatch is justified only when the work is both independent and bounded, and sp
 4. Delegate implementation only after the user has approved and Cassor has recorded the exact plan revision. Grant one implementation worker explicit, task-scoped write authority. Never run more than one implementation worker, and never overlap its repository mutations with another worker.
 5. Use an independent verification worker only for substantial, independently checkable verification. It is read-only and may run in parallel only with other read-only work that meets the parallel prerequisites.
 6. Structured returns are preferred for dispatched work. If the runtime cannot provide them, either collect a compact evidence-based result in the applicable schema format or execute the role sequentially; never label an ordinary response as a runtime-structured return.
-7. Explicit worker-model routing is optional. If the runtime supports it, choose a model appropriate to the bounded role and report only that routing was available and used. If it does not, use the runtime default and do not imply a specific model was selected.
+7. Explicit worker-model routing is optional. If the runtime supports it and `[runtimes.codex]` contains the needed role mapping, select that configured model: the default maps `orchestrator` and `discovery` to `gpt-5.6-sol`, and `implementation` and `verification` to `gpt-5.6-luna`. Report only that routing was available and used. If routing is unavailable or configuration is incomplete, use the runtime default and do not imply a specific model was selected.
 
 A worker receives only its exact task, relevant state, role contract, repository boundary, and explicit mutation authority. Implementation writes require approved, recorded plan authority; discovery and verification remain read-only. Workers never ask the user questions, approve work, record plans, transition Cassor state, or persist transcripts. The orchestrator alone retains those authorities.
 

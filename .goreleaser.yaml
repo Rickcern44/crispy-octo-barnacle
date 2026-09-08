@@ -1,0 +1,17 @@
+version: 2
+
+builds:
+  - main: .
+    binary: cassor
+    goos: [darwin, linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X github.com/rickcern44/cassor/internal/cmd.Version={{ .Version }} -X github.com/rickcern44/cassor/internal/cmd.Commit={{ .Commit }} -X github.com/rickcern44/cassor/internal/cmd.Date={{ .Date }}
+
+archives:
+  - format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
