@@ -65,8 +65,28 @@ jobs:
           fi
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
 
+      - uses: golangci/golangci-lint-action@v9.3.0
+        with:
+          version: v2.13.2
+
+      - name: Check formatting
+        run: |
+          mapfile -t files < <(git ls-files '*.go')
+          unformatted="$(gofmt -l "${files[@]}")"
+          test -z "${unformatted}" || {
+            echo "Run gofmt on these files:" >&2
+            echo "${unformatted}" >&2
+            exit 1
+          }
+
+      - name: Vet
+        run: go vet ./...
+
       - name: Test
         run: go test ./...
+
+      - name: Build
+        run: go build ./...
 
       - name: Generate release notes
         env:

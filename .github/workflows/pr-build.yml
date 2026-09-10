@@ -1,4 +1,4 @@
-name: Validate
+name: PR Build
 
 on:
   pull_request:
@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 jobs:
-  validate:
+  quality:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,6 +18,29 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+
+      - uses: golangci/golangci-lint-action@v9.3.0
+        with:
+          version: v2.13.2
+
+      - name: Check formatting
+        run: |
+          mapfile -t files < <(git ls-files '*.go')
+          unformatted="$(gofmt -l "${files[@]}")"
+          test -z "${unformatted}" || {
+            echo "Run gofmt on these files:" >&2
+            echo "${unformatted}" >&2
+            exit 1
+          }
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build
+        run: go build ./...
 
       - uses: gittools/actions/gitversion/setup@v4.7.0
         with:
@@ -35,9 +58,6 @@ jobs:
           distribution: goreleaser
           version: v2.18.1
           args: check
-
-      - name: Test
-        run: go test ./...
 
       - name: Generate unreleased release notes
         run: git-cliff --config cliff.toml --unreleased --output /tmp/release-notes.md

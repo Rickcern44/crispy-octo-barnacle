@@ -68,11 +68,13 @@ goreleaser check
 goreleaser release --snapshot --clean --release-notes=/tmp/release-notes.md
 ```
 
-Pull requests run the same tests and configuration checks in GitHub Actions.
-After a pull request is merged, start **Release** from `main` in the Actions
-tab. The workflow verifies the selected version is unused, tests the source,
-generates release notes, creates the annotated tag, and publishes the GitHub
-release with macOS and Linux AMD64/ARM64 archives and checksums.
+The **PR Build** workflow runs golangci-lint, `gofmt`, `go vet`, tests, a Go
+build, version calculation, release-note generation, and GoReleaser validation
+for every pull request. After a pull request is merged, start **Release** from
+`main` in the Actions tab. It repeats the Go quality gates before it verifies
+the selected version is unused, generates release notes, creates the annotated
+tag, and publishes the GitHub release with macOS and Linux AMD64/ARM64 archives
+and checksums.
 
 If publishing fails after the tag is created, correct the problem in a new
 commit and dispatch the workflow again after an authorized maintainer removes
