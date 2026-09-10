@@ -10,7 +10,7 @@ import (
 
 func recordPlanCommand() *cobra.Command {
 	var path, approvalNote string
-	var approve, approvedByUser, asJSON bool
+	var approve, approvedByUser, allowOpenQuestions, asJSON bool
 	command := &cobra.Command{Use: "record", Short: "Atomically record an approved plan packet", RunE: func(command *cobra.Command, _ []string) error {
 		if !approve || !approvedByUser {
 			return fmt.Errorf("recording a plan requires both --approve and --approved-by-user")
@@ -24,7 +24,21 @@ func recordPlanCommand() *cobra.Command {
 			return err
 		}
 		defer database.Close()
-		recorded, err := store.RecordApprovedPlan(database, packet, approvalNote)
+		if len(packet.OpenQuestions) > 0 && !allowOpenQuestions {
+			return fmt.Errorf("plan has unresolved open questions; use --allow-open-questions only with explicit approval")
+		}
+		if allowOpenQuestions && len(packet.OpenQuestions) > 0 {
+			_, err = fmt.Fprintln(command.ErrOrStderr(), "WARNING: recording this approved plan with unresolved open questions; they remain in immutable plan content.")
+			if err != nil {
+				return err
+			}
+		}
+		var recorded store.RecordedPlan
+		if allowOpenQuestions {
+			recorded, err = store.RecordApprovedPlanAllowOpenQuestions(database, packet, approvalNote)
+		} else {
+			recorded, err = store.RecordApprovedPlan(database, packet, approvalNote)
+		}
 		if err != nil {
 			return err
 		}
@@ -37,6 +51,7 @@ func recordPlanCommand() *cobra.Command {
 	command.Flags().StringVar(&path, "file", "", "path to a plan-packet JSON file")
 	command.Flags().BoolVar(&approve, "approve", false, "record this approved plan revision")
 	command.Flags().BoolVar(&approvedByUser, "approved-by-user", false, "confirm explicit user approval")
+	command.Flags().BoolVar(&allowOpenQuestions, "allow-open-questions", false, "explicitly approve recording unresolved open questions")
 	command.Flags().StringVar(&approvalNote, "approval-note", "", "optional user approval note")
 	command.Flags().BoolVar(&asJSON, "json", false, "emit JSON")
 	_ = command.MarkFlagRequired("file")

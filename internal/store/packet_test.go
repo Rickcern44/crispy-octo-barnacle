@@ -1,6 +1,7 @@
 package store
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"testing"
 )
@@ -61,5 +62,42 @@ func TestRecordApprovedPlanRejectsOpenQuestionsWithoutWriting(t *testing.T) {
 	}
 	if count != 0 {
 		t.Fatalf("roadmap item count = %d, want 0", count)
+	}
+}
+
+func TestValidatePlanPacketAllowsStructurallyValidOpenQuestions(t *testing.T) {
+	err := ValidatePlanPacket(PlanPacket{
+		RoadmapItem:        PacketRoadmapItem{Title: "Skills", Category: "Needed", Horizon: "Now"},
+		Goal:               "Goal",
+		OpenQuestions:      []string{"Which runtime?"},
+		AcceptanceCriteria: []PacketCriterion{{Title: "The plan is recorded"}},
+		Tasks:              []PacketTask{{Title: "Task", Verification: []string{"go test ./..."}}},
+	})
+	if err != nil {
+		t.Fatalf("ValidatePlanPacket() rejected open questions: %v", err)
+	}
+}
+
+func TestRecordApprovedPlanAllowOpenQuestionsPreservesQuestions(t *testing.T) {
+	database := openTestDatabase(t)
+	packet := PlanPacket{
+		RoadmapItem:        PacketRoadmapItem{Title: "Skills", Category: "Needed", Horizon: "Now"},
+		Goal:               "Goal",
+		OpenQuestions:      []string{"Which runtime?"},
+		AcceptanceCriteria: []PacketCriterion{{Title: "The plan is recorded"}},
+		Tasks:              []PacketTask{{Title: "Task", Verification: []string{"go test ./..."}}},
+	}
+	recorded, err := RecordApprovedPlanAllowOpenQuestions(database, packet, "explicit override")
+	if err != nil {
+		database.Close()
+		t.Fatal(err)
+	}
+	database.Close()
+	var content PlanPacket
+	if err := json.Unmarshal([]byte(recorded.Plan.Content), &content); err != nil {
+		t.Fatal(err)
+	}
+	if len(content.OpenQuestions) != 1 || content.OpenQuestions[0] != "Which runtime?" {
+		t.Fatalf("recorded open questions = %#v", content.OpenQuestions)
 	}
 }

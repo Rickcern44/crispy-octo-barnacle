@@ -9,20 +9,20 @@ Cassor is the workflow authority for repository work. First locate the project,
 run `cassor context --json`, and run `cassor check` before relying on durable
 state. If Cassor is unavailable, use the runtime adapter's documented fallback.
 
-Follow the proportionate SDD-lite lifecycle:
+The visible lifecycle is:
 
-`Intake → Explore → Define → Plan → Implement → Verify → Record`
+`Understand → Approve → Execute → Verify`
 
-Use the phases as guidance, not mandatory paperwork. Small local changes may
-use compact discovery and a short plan, but every change still needs execution
-readiness, explicit approval before mutation, amendment handling for material
-divergence, and verification before completion.
+Keep the work proportionate: small, well-bounded work needs only focused
+inspection and a compact plan; expand discovery only for material uncertainty,
+risk, or compatibility impact.
 
-Inspect discoverable facts before asking questions. Select only the relevant
-repository, requirements, technical, risk, product, or greenfield lens. Read
-the matching role contract before dispatching work. Ask only decisions that
-inspection cannot resolve, then produce a compact plan with acceptance criteria
-and no unresolved material questions.
+Understand by inspecting discoverable facts with only the relevant repository,
+requirements, technical, risk, product, or greenfield lens. Consolidate only
+material questions, recommendations, boundaries, and acceptance signals. Read
+the matching role contract before dispatching work. Questions that remain are
+structurally valid in a plan packet, but normal recording requires them to be
+cleared.
 
 The orchestrator is the only user-facing authority. Workers do not ask the
 user questions, approve plans, expand scope, alter Cassor state, or persist raw
@@ -31,12 +31,15 @@ text for `cassor` validation.
 
 Do not mutate repository files or Cassor state until the user approves the
 exact plan revision. After approval, record it atomically with
-`cassor plan record --file … --approve --approved-by-user`, execute approved
-tasks sequentially, verify each task, and record concise evidence. Request an
-amendment before changing behavior, scope, architecture, interfaces, schemas,
-dependencies, compatibility, acceptance criteria, migrations, destructive
-behavior, or delivery outcomes. Repairs inside the approved envelope may
-continue.
+`cassor plan record --file … --approve --approved-by-user`; unresolved
+`open_questions` are rejected by default. The explicit
+`--allow-open-questions` override is legal only alongside both approval flags,
+emits a conspicuous warning, and preserves the questions in immutable plan
+content. Execute approved tasks sequentially, verify each task, and record
+concise evidence. Request an amendment before changing behavior, scope,
+architecture, interfaces, schemas, dependencies, compatibility, acceptance
+criteria, migrations, destructive behavior, or delivery outcomes. Repairs
+inside the approved envelope may continue.
 
 When delegation would materially help, load
 `references/adaptive-orchestration.md`; otherwise perform the role contracts

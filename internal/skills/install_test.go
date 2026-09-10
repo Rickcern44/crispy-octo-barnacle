@@ -291,8 +291,8 @@ func TestCodexInstallDeliversAdaptiveDispatchPolicyFromEmbeddedAssets(t *testing
 	}
 	for path, required := range map[string][]string{
 		"SKILL.md": {
-			"Follow the proportionate SDD-lite lifecycle",
-			"explicit approval before mutation",
+			"Understand → Approve → Execute → Verify",
+			"open_questions` are rejected by default",
 			"references/adaptive-orchestration.md",
 			"cassor plan record --file",
 		},

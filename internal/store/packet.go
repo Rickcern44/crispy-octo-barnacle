@@ -84,9 +84,6 @@ func (packet PlanPacket) validate() error {
 	if strings.TrimSpace(packet.Goal) == "" {
 		return fmt.Errorf("plan goal is required")
 	}
-	if len(packet.OpenQuestions) > 0 {
-		return fmt.Errorf("plan has unresolved open questions")
-	}
 	if len(packet.Tasks) == 0 {
 		return fmt.Errorf("plan requires at least one task")
 	}
@@ -128,8 +125,23 @@ func ValidatePlanPacket(packet PlanPacket) error {
 
 // RecordApprovedPlan atomically persists an already user-approved plan packet.
 func RecordApprovedPlan(database *sql.DB, packet PlanPacket, approvalNote string) (RecordedPlan, error) {
+	return recordApprovedPlan(database, packet, approvalNote, false)
+}
+
+// RecordApprovedPlanAllowOpenQuestions atomically persists an explicitly
+// approved plan packet that still contains open questions. The questions are
+// retained in the immutable plan content; callers should make the override
+// conspicuous to the approving user.
+func RecordApprovedPlanAllowOpenQuestions(database *sql.DB, packet PlanPacket, approvalNote string) (RecordedPlan, error) {
+	return recordApprovedPlan(database, packet, approvalNote, true)
+}
+
+func recordApprovedPlan(database *sql.DB, packet PlanPacket, approvalNote string, allowOpenQuestions bool) (RecordedPlan, error) {
 	if err := packet.validate(); err != nil {
 		return RecordedPlan{}, err
+	}
+	if len(packet.OpenQuestions) > 0 && !allowOpenQuestions {
+		return RecordedPlan{}, fmt.Errorf("plan has unresolved open questions; record with the explicit approved override")
 	}
 	content, err := json.Marshal(packet)
 	if err != nil {

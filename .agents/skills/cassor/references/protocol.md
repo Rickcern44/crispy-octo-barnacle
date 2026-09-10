@@ -26,13 +26,13 @@ elapsed time, observed tool calls, and verification result. Supply token flags
 only when the runtime returns those metrics. Missing values are reported as
 unavailable; never estimate them or treat them as zero.
 
-## Discovery and planning
+## Understand
 
-Inspect repository facts before questions. Use only relevant repository,
-requirements, technical, risk, product, or greenfield lenses. Classify findings
-as required, recommended, or future opportunity. Recommendations and future
-opportunities require explicit user approval before entering durable roadmap
-state.
+Inspect repository facts before questions. Consolidate only material questions,
+recommendations, boundaries, and acceptance signals. Use only relevant
+repository, requirements, technical, risk, product, or greenfield lenses.
+Recommendations and future opportunities require explicit user approval before
+entering durable roadmap state.
 
 Cover the desired outcome, users and permissions, current behavior, included
 and excluded scope, edge cases, compatibility, UX/API contract, failure
@@ -46,12 +46,16 @@ same explicit plan approval, implement locally, verify the result, and record
 the evidence. Do not create worker findings, broad discovery artifacts, or
 benchmark output unless they add decision or verification value.
 
-## Approval and execution
+## Approve → Execute → Verify
 
 The user approves an immutable plan revision, not individual commands or diffs.
 One approval may authorize multiple tasks. Record the packet only after
-approval with both `--approve` and `--approved-by-user`; include an approval
-note only when useful. Do not store chat transcripts.
+approval with both `--approve` and `--approved-by-user`; unresolved
+`open_questions` are rejected by default. The explicit
+`--allow-open-questions` override is permitted only with both approval flags,
+must emit a conspicuous warning, and preserves the questions in immutable plan
+content. Include an approval note only when useful. Do not store chat
+transcripts.
 
 Start one approved task at a time. Implement within the plan boundary, run its
 stated verification, and mark it complete with concise evidence. If blocked,

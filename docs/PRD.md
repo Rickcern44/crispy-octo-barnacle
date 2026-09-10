@@ -186,6 +186,14 @@ documents or visible ceremony for every task. The normal human experience is:
 Understand → Approve → Execute → Verify
 ```
 
+Plan packets may retain structurally valid `open_questions` during Understand,
+so the orchestrator can consolidate material uncertainty before approval. Plan
+recording clears those questions by default: `cassor plan record` rejects a
+packet that still has them. An explicitly approved exception may use
+`--allow-open-questions` together with both `--approve` and
+`--approved-by-user`; the CLI emits a conspicuous warning and preserves the
+questions in the immutable recorded plan content.
+
 ## Explicit non-goals
 
 Cassor is not:

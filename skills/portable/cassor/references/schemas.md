@@ -53,7 +53,7 @@ Use a JSON object with `roadmap_item`, `goal`, `scope`, `decisions`, `acceptance
 }
 ```
 
-Generate a starting packet with `cassor plan template --item ID > plan.json`, edit the packet, and run `cassor plan validate --file plan.json`. Only after explicit user approval, record it with `cassor plan record --file plan.json --approve --approved-by-user`. `goal` must be non-empty and `open_questions` must be empty before recording. Task verification is declarative; command output remains evidence rather than plan content.
+Generate a starting packet with `cassor plan template --item ID > plan.json`, edit the packet, and run `cassor plan validate --file plan.json`. Structural validation permits `open_questions` so Understand can consolidate material uncertainty. After explicit user approval, normal recording with `cassor plan record --file plan.json --approve --approved-by-user` requires them to be cleared. An explicitly approved exception may add `--allow-open-questions` alongside both approval flags; the CLI warns conspicuously and preserves the questions in immutable plan content. `goal` must be non-empty before recording. Task verification is declarative; command output remains evidence rather than plan content.
 
 ## Implementation result
 
