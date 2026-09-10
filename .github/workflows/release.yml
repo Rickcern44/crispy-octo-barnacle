@@ -1,0 +1,106 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      initial_version:
+        description: Initial version to use when the repository has no v-prefixed tags
+        required: true
+        default: v0.1.0
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: gittools/actions/gitversion/setup@v4.7.0
+        with:
+          versionSpec: 6.8.2
+
+      - id: gitversion
+        uses: gittools/actions/gitversion/execute@v4.7.0
+
+      - id: release_version
+        name: Select release version
+        env:
+          INITIAL_VERSION: ${{ inputs.initial_version }}
+          CALCULATED_VERSION: ${{ steps.gitversion.outputs.semVer }}
+        run: |
+          if git tag --list 'v[0-9]*' | grep -q .; then
+            tag="v${CALCULATED_VERSION}"
+          else
+            tag="${INITIAL_VERSION}"
+          fi
+          case "${tag}" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "Release tag must be vMAJOR.MINOR.PATCH." >&2; exit 1 ;;
+          esac
+          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            echo "Tag ${tag} already exists." >&2
+            exit 1
+          fi
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            echo "GitHub release ${tag} already exists." >&2
+            exit 1
+          fi
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+
+      - uses: golangci/golangci-lint-action@v9.3.0
+        with:
+          version: v2.13.2
+
+      - name: Check formatting
+        run: |
+          mapfile -t files < <(git ls-files '*.go')
+          unformatted="$(gofmt -l "${files[@]}")"
+          test -z "${unformatted}" || {
+            echo "Run gofmt on these files:" >&2
+            echo "${unformatted}" >&2
+            exit 1
+          }
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build
+        run: go build ./...
+
+      - name: Generate release notes
+        uses: orhun/git-cliff-action@v4.9.0
+        with:
+          version: v2.14.1
+          args: --tag ${{ steps.release_version.outputs.tag }} --output release-notes.md
+
+      - name: Tag release commit
+        env:
+          TAG: ${{ steps.release_version.outputs.tag }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag --annotate "${TAG}" --message "Release ${TAG}"
+          git push origin "${TAG}"
+
+      - uses: goreleaser/goreleaser-action@v7.2.3
+        with:
+          distribution: goreleaser
+          version: v2.18.1
+          args: release --clean --release-notes=release-notes.md

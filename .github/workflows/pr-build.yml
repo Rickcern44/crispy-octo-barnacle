@@ -1,0 +1,65 @@
+name: PR Build
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: golangci/golangci-lint-action@v9.3.0
+        with:
+          version: v2.13.2
+
+      - name: Check formatting
+        run: |
+          mapfile -t files < <(git ls-files '*.go')
+          unformatted="$(gofmt -l "${files[@]}")"
+          test -z "${unformatted}" || {
+            echo "Run gofmt on these files:" >&2
+            echo "${unformatted}" >&2
+            exit 1
+          }
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build
+        run: go build ./...
+
+      - uses: gittools/actions/gitversion/setup@v4.7.0
+        with:
+          versionSpec: 6.8.2
+
+      - id: gitversion
+        uses: gittools/actions/gitversion/execute@v4.7.0
+
+      - name: Generate unreleased release notes
+        uses: orhun/git-cliff-action@v4.9.0
+        with:
+          version: v2.14.1
+          args: --unreleased --output /tmp/release-notes.md
+
+      - uses: goreleaser/goreleaser-action@v7.2.3
+        with:
+          distribution: goreleaser
+          version: v2.18.1
+          args: check
+
+      - name: Confirm calculated version
+        run: test -n '${{ steps.gitversion.outputs.semVer }}'
