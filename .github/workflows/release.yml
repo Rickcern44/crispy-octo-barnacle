@@ -1,13 +1,9 @@
 name: Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      initial_version:
-        description: Initial version to use when the repository has no v-prefixed tags
-        required: true
-        default: v0.1.0
-        type: string
+  push:
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -39,7 +35,7 @@ jobs:
       - id: release_version
         name: Select release version
         env:
-          INITIAL_VERSION: ${{ inputs.initial_version }}
+          INITIAL_VERSION: v0.1.0
           CALCULATED_VERSION: ${{ steps.gitversion.outputs.semVer }}
         run: |
           if git tag --list 'v[0-9]*' | grep -q .; then
