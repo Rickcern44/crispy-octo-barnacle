@@ -45,5 +45,6 @@ When delegation would materially help, load
 `references/adaptive-orchestration.md`; otherwise perform the role contracts
 locally and sequentially. Load `references/protocol.md`, `references/schemas.md`,
 and the role contract only when their detail is needed. Use
-`cassor run-report` for observed, non-persistent run metrics; unavailable
-telemetry remains unavailable.
+`cassor run-report` for observed run metrics and `cassor run-report record` for
+concise, explicitly keyed comparison records; unavailable telemetry remains
+unavailable.

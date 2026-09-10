@@ -138,8 +138,11 @@ or wasteful, the orchestrator follows the same contract locally.
 Cassor can generate a static documentation and roadmap site. The source
 repository additionally contains an enhanced SvelteKit documentation view.
 These are derived views, not authoritative state. `cassor check` validates
-state and generation invariants; benchmark and run-report commands report only
-the measurements supplied or observable for a run.
+state and generation invariants. Benchmark and run-report commands report only
+the measurements supplied or observable for a run. Optional feature reports
+can persist concise, observed comparison records keyed by an explicit
+comparison key; unavailable values remain unavailable, and Cassor does not
+estimate tokens, store transcripts, or produce rankings.
 
 ## Intended product model
 

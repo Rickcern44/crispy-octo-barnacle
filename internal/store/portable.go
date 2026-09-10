@@ -477,7 +477,7 @@ func importReports(transaction *sql.Tx, values []FeatureReport) error {
 		if err != nil {
 			return err
 		}
-		if _, err := transaction.Exec(`INSERT INTO feature_reports(id,roadmap_item_id,execution_mode,roles,elapsed_ns,tool_calls,verification,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,total_tokens,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`, value.ID, value.ItemID, value.ExecutionMode, string(roles), value.ElapsedNS, value.ToolCalls, value.Verification, value.InputTokens, value.CachedInputTokens, value.OutputTokens, value.ReasoningTokens, value.TotalTokens, value.CreatedAt); err != nil {
+		if _, err := transaction.Exec(`INSERT INTO feature_reports(id,roadmap_item_id,execution_mode,roles,elapsed_ns,tool_calls,verification,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,total_tokens,comparison_key,context_packets,context_bytes,handoffs,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, value.ID, value.ItemID, value.ExecutionMode, string(roles), value.ElapsedNS, value.ToolCalls, value.Verification, value.InputTokens, value.CachedInputTokens, value.OutputTokens, value.ReasoningTokens, value.TotalTokens, value.ComparisonKey, value.ContextPackets, value.ContextBytes, value.Handoffs, value.CreatedAt); err != nil {
 			return err
 		}
 	}

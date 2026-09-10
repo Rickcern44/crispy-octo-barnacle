@@ -19,6 +19,10 @@ type FeatureReport struct {
 	OutputTokens      *int64   `json:"output_tokens"`
 	ReasoningTokens   *int64   `json:"reasoning_tokens"`
 	TotalTokens       *int64   `json:"total_tokens"`
+	ComparisonKey     *string  `json:"comparison_key"`
+	ContextPackets    *int64   `json:"context_packets"`
+	ContextBytes      *int64   `json:"context_bytes"`
+	Handoffs          *int64   `json:"handoffs"`
 	CreatedAt         string   `json:"created_at"`
 }
 
@@ -27,7 +31,8 @@ func AddFeatureReport(database *sql.DB, value FeatureReport) (FeatureReport, err
 	if err != nil {
 		return value, err
 	}
-	result, err := database.Exec(`INSERT INTO feature_reports(roadmap_item_id,execution_mode,roles,elapsed_ns,tool_calls,verification,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,total_tokens,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`, value.ItemID, value.ExecutionMode, string(roles), value.ElapsedNS, value.ToolCalls, value.Verification, value.InputTokens, value.CachedInputTokens, value.OutputTokens, value.ReasoningTokens, value.TotalTokens, now())
+	createdAt := now()
+	result, err := database.Exec(`INSERT INTO feature_reports(roadmap_item_id,execution_mode,roles,elapsed_ns,tool_calls,verification,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,total_tokens,comparison_key,context_packets,context_bytes,handoffs,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, value.ItemID, value.ExecutionMode, string(roles), value.ElapsedNS, value.ToolCalls, value.Verification, value.InputTokens, value.CachedInputTokens, value.OutputTokens, value.ReasoningTokens, value.TotalTokens, value.ComparisonKey, value.ContextPackets, value.ContextBytes, value.Handoffs, createdAt)
 	if err != nil {
 		return value, fmt.Errorf("add feature report: %w", err)
 	}
@@ -35,12 +40,12 @@ func AddFeatureReport(database *sql.DB, value FeatureReport) (FeatureReport, err
 	if err != nil {
 		return value, err
 	}
-	value.CreatedAt = now()
+	value.CreatedAt = createdAt
 	return value, nil
 }
 
 func ListFeatureReports(database *sql.DB) ([]FeatureReport, error) {
-	rows, err := database.Query(`SELECT id,roadmap_item_id,execution_mode,roles,elapsed_ns,tool_calls,verification,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,total_tokens,created_at FROM feature_reports ORDER BY roadmap_item_id,id`)
+	rows, err := database.Query(`SELECT id,roadmap_item_id,execution_mode,roles,elapsed_ns,tool_calls,verification,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,total_tokens,comparison_key,context_packets,context_bytes,handoffs,created_at FROM feature_reports ORDER BY roadmap_item_id,id`)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +54,7 @@ func ListFeatureReports(database *sql.DB) ([]FeatureReport, error) {
 	for rows.Next() {
 		var v FeatureReport
 		var roles string
-		if err := rows.Scan(&v.ID, &v.ItemID, &v.ExecutionMode, &roles, &v.ElapsedNS, &v.ToolCalls, &v.Verification, &v.InputTokens, &v.CachedInputTokens, &v.OutputTokens, &v.ReasoningTokens, &v.TotalTokens, &v.CreatedAt); err != nil {
+		if err := rows.Scan(&v.ID, &v.ItemID, &v.ExecutionMode, &roles, &v.ElapsedNS, &v.ToolCalls, &v.Verification, &v.InputTokens, &v.CachedInputTokens, &v.OutputTokens, &v.ReasoningTokens, &v.TotalTokens, &v.ComparisonKey, &v.ContextPackets, &v.ContextBytes, &v.Handoffs, &v.CreatedAt); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal([]byte(roles), &v.Roles); err != nil {

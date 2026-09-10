@@ -58,7 +58,10 @@ Workers return only the applicable compact result schema from
 returns are unavailable, consolidate an equivalently compact evidence-based
 result without representing it as runtime-provided structure.
 
-Use `cassor run-report` to render non-persistent execution mode, roles, elapsed
-time, observed tool calls, verification, and runtime-reported token values.
-Missing token fields are explicitly unavailable, never estimated or treated
-as zero. Do not persist raw worker transcripts or hidden reasoning.
+Use `cassor run-report` to render execution mode, roles, elapsed time, observed
+tool calls, verification, context packet counts/bytes, handoffs, and
+runtime-reported token values. `cassor run-report record` may persist these
+concise observed metrics against a feature, and `cassor run-report compare
+--comparison-key <key>` shows only records sharing that explicit key. Missing
+fields are explicitly unavailable, never estimated or treated as zero. Do not
+persist raw worker transcripts, hidden reasoning, or inferred rankings.

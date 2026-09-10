@@ -20,11 +20,13 @@ context.
 
 ## Efficiency reporting
 
-Use `cassor run-report` to render a compact, non-persistent record of metrics
-that the runtime actually exposes. Record execution mode, dispatched roles,
-elapsed time, observed tool calls, and verification result. Supply token flags
-only when the runtime returns those metrics. Missing values are reported as
-unavailable; never estimate them or treat them as zero.
+Use `cassor run-report` to render a compact record of metrics that the runtime
+actually exposes. Record execution mode, dispatched roles, elapsed time,
+observed tool calls, verification result, and optional context/handoff metrics.
+`cassor run-report record` persists these only when an orchestrator chooses an
+explicit comparison key; `cassor run-report compare` filters by that key.
+Supply token flags only when the runtime returns those metrics. Missing values
+are reported as unavailable; never estimate them or treat them as zero.
 
 ## Understand
 
