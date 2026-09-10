@@ -2,9 +2,11 @@
 package site
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,6 +24,24 @@ const (
 	sourceGuidesDirectory = "docs-site/src/routes/guides"
 	relativeOutput        = "docs/roadmap/index.html"
 )
+
+// Generate builds the richer project documentation site when its SvelteKit
+// workspace is present. All other initialized repositories receive a
+// dependency-free static roadmap projection.
+func Generate(repositoryRoot, stateDir string) (string, error) {
+	if hasDocumentationWorkspace(repositoryRoot) {
+		if _, err := Build(repositoryRoot, stateDir); err != nil {
+			return "", err
+		}
+		return Compile(repositoryRoot)
+	}
+	return BuildPortable(repositoryRoot, stateDir)
+}
+
+func hasDocumentationWorkspace(repositoryRoot string) bool {
+	info, err := os.Stat(filepath.Join(repositoryRoot, "docs-site", "package.json"))
+	return err == nil && !info.IsDir()
+}
 
 type roadmapData struct {
 	GeneratedAt      string                        `json:"generated_at"`
@@ -104,6 +124,40 @@ func Compile(repositoryRoot string) (string, error) {
 	return output, nil
 }
 
+// BuildPortable writes a standalone roadmap that requires neither Node nor
+// Cassor's source-repository documentation files.
+func BuildPortable(repositoryRoot, stateDir string) (string, error) {
+	data, err := readData(stateDir)
+	if err != nil {
+		return "", err
+	}
+	data.GeneratedAt = time.Now().UTC().Format(time.RFC3339)
+	encoded, err := json.Marshal(data)
+	if err != nil {
+		return "", fmt.Errorf("encode portable roadmap data: %w", err)
+	}
+	page, err := renderPortable(template.JS(encoded))
+	if err != nil {
+		return "", err
+	}
+	output := filepath.Join(repositoryRoot, relativeOutput)
+	if err := os.MkdirAll(filepath.Dir(output), 0o755); err != nil {
+		return "", fmt.Errorf("create portable roadmap directory: %w", err)
+	}
+	if err := os.WriteFile(output, page, 0o644); err != nil {
+		return "", fmt.Errorf("write portable roadmap: %w", err)
+	}
+	return output, nil
+}
+
+func renderPortable(data template.JS) ([]byte, error) {
+	var output bytes.Buffer
+	if err := portableTemplate.Execute(&output, struct{ Data template.JS }{data}); err != nil {
+		return nil, fmt.Errorf("render portable roadmap: %w", err)
+	}
+	return output.Bytes(), nil
+}
+
 // Validate verifies that the current state can be rendered without writing files.
 func Validate(stateDir string) error {
 	data, err := readData(stateDir)
@@ -124,13 +178,13 @@ func writeGuides(repositoryRoot string) error {
 		"CASSOR_PLAN_PACKET_SCHEMA.md": "plan-packet-schema",
 		"CASSOR_SKILLS_SPEC.md":        "skills-specification",
 		"LIVING_APPLICATION_MAP.md":    "living-application-map",
-		"CASSOR_RECOVERY.md":            "recovery",
-		"CASSOR_CONTEXT_CONTRACT.md":    "context-contract",
-		"SDD_LITE_MIGRATION_POLICY.md":  "migration-policy",
-		"GETTING_STARTED.md":             "getting-started",
-		"WORKFLOW_GUIDE.md":              "workflow",
-		"RESUME_WORK.md":                 "resume-work",
-		"ROADMAP_GUIDE.md":               "roadmap-guide",
+		"CASSOR_RECOVERY.md":           "recovery",
+		"CASSOR_CONTEXT_CONTRACT.md":   "context-contract",
+		"SDD_LITE_MIGRATION_POLICY.md": "migration-policy",
+		"GETTING_STARTED.md":           "getting-started",
+		"WORKFLOW_GUIDE.md":            "workflow",
+		"RESUME_WORK.md":               "resume-work",
+		"ROADMAP_GUIDE.md":             "roadmap-guide",
 	} {
 		content, err := os.ReadFile(filepath.Join(repositoryRoot, "docs", source))
 		if err != nil {
@@ -256,13 +310,13 @@ func renderSources(data roadmapData, repositoryRoot string) (map[string][]byte, 
 			"CASSOR_PLAN_PACKET_SCHEMA.md": "guides/plan-packet-schema.md",
 			"CASSOR_SKILLS_SPEC.md":        "guides/skills-specification.md",
 			"LIVING_APPLICATION_MAP.md":    "guides/living-application-map.md",
-			"CASSOR_RECOVERY.md":            "guides/recovery.md",
-			"CASSOR_CONTEXT_CONTRACT.md":    "guides/context-contract.md",
-			"SDD_LITE_MIGRATION_POLICY.md":  "guides/migration-policy.md",
-			"GETTING_STARTED.md":             "guides/getting-started.md",
-			"WORKFLOW_GUIDE.md":              "guides/workflow.md",
-			"RESUME_WORK.md":                 "guides/resume-work.md",
-			"ROADMAP_GUIDE.md":               "guides/roadmap-guide.md",
+			"CASSOR_RECOVERY.md":           "guides/recovery.md",
+			"CASSOR_CONTEXT_CONTRACT.md":   "guides/context-contract.md",
+			"SDD_LITE_MIGRATION_POLICY.md": "guides/migration-policy.md",
+			"GETTING_STARTED.md":           "guides/getting-started.md",
+			"WORKFLOW_GUIDE.md":            "guides/workflow.md",
+			"RESUME_WORK.md":               "guides/resume-work.md",
+			"ROADMAP_GUIDE.md":             "guides/roadmap-guide.md",
 		} {
 			content, err := os.ReadFile(filepath.Join(repositoryRoot, "docs", source))
 			if err != nil {

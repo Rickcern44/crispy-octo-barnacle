@@ -8,9 +8,86 @@
 
 body {
 	margin: 0;
-	background: var(--color-cassor-950);
+	background: radial-gradient(circle at top right, #12365b, var(--color-cassor-950) 48%);
 	color: #e2e8f0;
 	font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+.roadmap-row {
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+	padding: 1rem;
+	transition: background-color 150ms ease;
+}
+.roadmap-row:hover {
+	background: rgb(30 41 59 / 0.7);
+}
+.roadmap-row-meta {
+	display: grid;
+	grid-template-columns: 9rem 4rem 7rem;
+	align-items: center;
+	gap: 0.75rem;
+	width: 21.5rem;
+}
+.roadmap-progress {
+	display: flex;
+	align-items: center;
+	gap: 0.55rem;
+	min-width: 9rem;
+}
+.progress-track {
+	width: 5.5rem;
+	height: 0.4rem;
+	overflow: hidden;
+	border-radius: 999px;
+	background: #020617;
+}
+.progress-track span {
+	display: block;
+	height: 100%;
+	border-radius: inherit;
+	background: var(--color-cassor-400);
+}
+.progress-value {
+	min-width: 3.1rem;
+	color: #6ee7b7;
+	font-size: 0.8rem;
+	font-variant-numeric: tabular-nums;
+	font-weight: 700;
+	text-align: right;
+}
+.status-badge {
+	border: 1px solid #294766;
+	border-radius: 999px;
+	background: #172f4d;
+	padding: 0.25rem 0.75rem;
+	color: #bae6fd;
+	font-size: 0.875rem;
+}
+
+@media (min-width: 640px) {
+	.roadmap-row {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+	}
+	.roadmap-row-meta {
+		flex-shrink: 0;
+	}
+}
+
+@media (max-width: 639px) {
+	.roadmap-row-meta {
+		display: flex;
+		width: auto;
+		justify-content: flex-start;
+		flex-wrap: wrap;
+	}
+}
+
+.roadmap-row h3 {
+	overflow-wrap: anywhere;
 }
 
 :focus-visible {

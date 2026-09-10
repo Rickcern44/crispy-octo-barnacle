@@ -69,10 +69,7 @@ func newSiteCommand() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		if _, err := site.Build(root, state); err != nil {
-			return err
-		}
-		output, err := site.Compile(root)
+		output, err := site.Generate(root, state)
 		if err != nil {
 			return err
 		}
@@ -152,10 +149,8 @@ func watchRoadmap(root, database string, reload func()) {
 		}
 		previous = info.ModTime()
 		if state, err := project.FindStateDirectory(root); err == nil {
-			if _, err := site.Build(root, state); err == nil {
-				if _, err := site.Compile(root); err == nil {
-					reload()
-				}
+			if _, err := site.Generate(root, state); err == nil {
+				reload()
 			}
 		}
 	}

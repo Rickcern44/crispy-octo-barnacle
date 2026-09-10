@@ -35,8 +35,11 @@ not automated yet.
 
 ## Developer documentation site
 
-Cassor generates the static multi-page developer site into `docs/roadmap/`.
-Node 20 or newer is required only to build the documentation site.
+Cassor generates a static roadmap into `docs/roadmap/`. In an ordinary
+initialized repository, `cassor site build` uses a dependency-free portable
+page and needs no Node installation or project documentation files. The Cassor
+source repository includes an enhanced SvelteKit developer site; Node 20 or
+newer is required only for that richer workspace.
 
 ```sh
 go run . site build

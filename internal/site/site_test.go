@@ -110,3 +110,47 @@ func TestBuildGeneratesDeterministicFeatureRoutes(t *testing.T) {
 		t.Fatal("generated guide route does not include the living application map")
 	}
 }
+
+func TestGenerateBuildsPortableRoadmapWithoutDocumentationWorkspace(t *testing.T) {
+	root := t.TempDir()
+	state := filepath.Join(root, project.StateDirectory)
+	if err := os.Mkdir(state, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.Write(config.Path(state), config.Config{Name: "Greenfield Demo"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Initialize(filepath.Join(state, store.DatabaseFileName)); err != nil {
+		t.Fatal(err)
+	}
+	database, err := store.Open(filepath.Join(state, store.DatabaseFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	packet := store.PlanPacket{
+		RoadmapItem:        store.PacketRoadmapItem{Title: "Portable roadmap", Description: "Build without Node.", Category: "Needed", Horizon: "Now"},
+		Goal:               "Generate a portable site.",
+		AcceptanceCriteria: []store.PacketCriterion{{ID: "portable", Title: "A bare repository builds a roadmap."}},
+		Tasks:              []store.PacketTask{{Title: "Render fallback", Description: "Write standalone HTML.", Verification: []string{"go test ./internal/site"}}},
+	}
+	if _, err := store.RecordApprovedPlan(database, packet, "test approval"); err != nil {
+		t.Fatal(err)
+	}
+	output, err := Generate(root, state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if output != filepath.Join(root, relativeOutput) {
+		t.Fatalf("output = %q", output)
+	}
+	page, err := os.ReadFile(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"Greenfield Demo", "Portable roadmap", "Render fallback", "A bare repository builds a roadmap.", "Search roadmap"} {
+		if !strings.Contains(string(page), expected) {
+			t.Fatalf("portable page does not include %q", expected)
+		}
+	}
+}

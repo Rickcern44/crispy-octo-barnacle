@@ -6,7 +6,10 @@ Generate a fresh static projection from SQLite state:
 cassor site build
 ```
 
-Open `docs/roadmap/index.html` or run `cassor site serve`. Use the Application view to understand enduring capabilities, the Roadmap view to follow delivery changes, and Docs to read the workflow contracts.
+Open `docs/roadmap/index.html` or run `cassor site serve`. A normal Cassor
+project receives a self-contained roadmap with search, filters, plans, tasks,
+and acceptance criteria. Repositories that include the optional `docs-site/`
+workspace receive Cassor's enhanced Application, Roadmap, and Docs views.
 
 For a GitHub Pages project path, set the base path during the build:
 
