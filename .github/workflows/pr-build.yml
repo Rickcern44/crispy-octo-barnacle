@@ -49,18 +49,17 @@ jobs:
       - id: gitversion
         uses: gittools/actions/gitversion/execute@v4.7.0
 
-      - uses: orhun/git-cliff-action@v4.9.0
+      - name: Generate unreleased release notes
+        uses: orhun/git-cliff-action@v4.9.0
         with:
           version: v2.14.1
+          args: --unreleased --output /tmp/release-notes.md
 
       - uses: goreleaser/goreleaser-action@v7.2.3
         with:
           distribution: goreleaser
           version: v2.18.1
           args: check
-
-      - name: Generate unreleased release notes
-        run: git-cliff --config cliff.toml --unreleased --output /tmp/release-notes.md
 
       - name: Confirm calculated version
         run: test -n '${{ steps.gitversion.outputs.semVer }}'
