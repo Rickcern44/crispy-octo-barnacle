@@ -552,6 +552,8 @@ func planCommand() *cobra.Command {
 		}{plan, tasks}, asJSON)
 	}}
 	show.Flags().BoolVar(&asJSON, "json", false, "emit JSON")
+	template := planTemplateCommand()
+	validate := planValidateCommand()
 	approve := &cobra.Command{Use: "approve ID", Args: cobra.ExactArgs(1), RunE: func(command *cobra.Command, args []string) error {
 		value, err := id(args[0])
 		if err != nil {
@@ -568,7 +570,7 @@ func planCommand() *cobra.Command {
 		_, err = fmt.Fprintf(command.OutOrStdout(), "Plan %d approved\n", value)
 		return err
 	}}
-	command.AddCommand(create, show, revise, approve, recordPlanCommand())
+	command.AddCommand(create, show, revise, template, validate, approve, recordPlanCommand())
 	return command
 }
 

@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -48,7 +49,9 @@ func (criterion *PacketCriterion) UnmarshalJSON(data []byte) error {
 	}
 	type plain PacketCriterion
 	var value plain
-	if err := json.Unmarshal(data, &value); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&value); err != nil {
 		return err
 	}
 	*criterion = PacketCriterion(value)
@@ -115,6 +118,12 @@ func (packet PlanPacket) validate() error {
 		}
 	}
 	return nil
+}
+
+// ValidatePlanPacket checks the structural requirements for an approved plan
+// packet without persisting it.
+func ValidatePlanPacket(packet PlanPacket) error {
+	return packet.validate()
 }
 
 // RecordApprovedPlan atomically persists an already user-approved plan packet.

@@ -1,10 +1,7 @@
 package cmd
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
@@ -18,18 +15,9 @@ func recordPlanCommand() *cobra.Command {
 		if !approve || !approvedByUser {
 			return fmt.Errorf("recording a plan requires both --approve and --approved-by-user")
 		}
-		contents, err := os.ReadFile(path)
+		packet, err := loadPlanPacket(path)
 		if err != nil {
-			return fmt.Errorf("read plan packet: %w", err)
-		}
-		var packet store.PlanPacket
-		decoder := json.NewDecoder(bytes.NewReader(contents))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&packet); err != nil {
-			return fmt.Errorf("decode plan packet: %w", err)
-		}
-		if decoder.More() {
-			return fmt.Errorf("plan packet must contain one JSON value")
+			return err
 		}
 		database, err := databaseForCommand()
 		if err != nil {
