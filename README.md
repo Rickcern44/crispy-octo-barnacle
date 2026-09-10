@@ -78,9 +78,9 @@ AMD64/ARM64 archives and checksums. Protect `main` to require pull requests if
 releases must only originate from merges.
 
 If publishing fails after the tag is created, correct the problem in a new
-commit and dispatch the workflow again after an authorized maintainer removes
-the incomplete GitHub release and tag. The workflow intentionally refuses to
-replace either one.
+commit on `main` after an authorized maintainer removes the incomplete GitHub
+release and tag. The resulting push reruns the workflow; it intentionally
+refuses to replace either one.
 
 ## Optional documentation site
 
