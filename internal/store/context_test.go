@@ -2,6 +2,7 @@ package store
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -11,9 +12,11 @@ func TestScopedContextContainsFreshSessionAssignment(t *testing.T) {
 	recorded, err := RecordApprovedPlan(database, PlanPacket{
 		RoadmapItem:        PacketRoadmapItem{Title: "Scoped item", Category: "Needed", Horizon: "Now"},
 		Goal:               "Resume implementation",
+		Scope:              PacketScope{Included: []string{"Context enrichment"}, Excluded: []string{"Unrelated redesign"}},
+		Decisions:          []string{"Keep the API stable"},
 		AcceptanceCriteria: []PacketCriterion{{ID: "behavior", Title: "Behavior is verified"}},
 		Constraints:        []string{"Keep the API stable", "Use the existing SQLite store"},
-		Tasks:              []PacketTask{{Title: "Implement behavior", Verification: []string{"go test ./internal/store"}}},
+		Tasks:              []PacketTask{{Title: "Implement behavior", Description: "Populate the active task context", Verification: []string{"go test ./internal/store"}}, {Title: "Unrelated follow-up", Description: "Do not include this description", Verification: []string{"go test ./internal/store"}}},
 	}, "")
 	if err != nil {
 		t.Fatal(err)
@@ -28,8 +31,18 @@ func TestScopedContextContainsFreshSessionAssignment(t *testing.T) {
 	if len(context.Constraints) != 2 || len(context.Criteria) != 1 || context.Criteria[0].Status != "Pending" {
 		t.Fatalf("scoped requirements = %#v / %#v", context.Constraints, context.Criteria)
 	}
-	if context.NextAction.ID != recorded.Tasks[0].ID || len(context.NextAction.Verification) != 1 {
+	if len(context.Scope.Included) != 1 || context.Scope.Included[0] != "Context enrichment" || len(context.Scope.Excluded) != 1 || context.Scope.Excluded[0] != "Unrelated redesign" || len(context.Decisions) != 1 || context.Decisions[0] != "Keep the API stable" {
+		t.Fatalf("approved plan context = scope %#v, decisions %#v", context.Scope, context.Decisions)
+	}
+	if context.NextAction.ID != recorded.Tasks[0].ID || context.NextAction.Description != "Populate the active task context" || len(context.NextAction.Verification) != 1 {
 		t.Fatalf("next action = %#v", context.NextAction)
+	}
+	encodedContext, err := json.Marshal(context)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encodedContext), "Do not include this description") {
+		t.Fatal("unrelated task description leaked into scoped context")
 	}
 	encoded, err := json.Marshal(context)
 	if err != nil {
@@ -96,6 +109,57 @@ func TestScopedContextSignalsTruncationAndStableReferences(t *testing.T) {
 		if reference.ID == 0 || reference.Command == "" {
 			t.Fatalf("unstable omitted reference = %#v", reference)
 		}
+	}
+}
+
+func TestScopedContextBoundsStructuredDetailsWithStableReferences(t *testing.T) {
+	database := openTestDatabase(t)
+	recorded, err := RecordApprovedPlan(database, PlanPacket{
+		RoadmapItem:        PacketRoadmapItem{Title: "Structured context", Category: "Needed", Horizon: "Now"},
+		Goal:               strings.Repeat("goal ", 300),
+		Scope:              PacketScope{Included: []string{strings.Repeat("included ", 120)}, Excluded: []string{strings.Repeat("excluded ", 120)}},
+		Decisions:          []string{strings.Repeat("decision ", 120)},
+		AcceptanceCriteria: []PacketCriterion{{ID: "verify", Title: "Verification"}},
+		Tasks:              []PacketTask{{Title: "Resume work", Description: strings.Repeat("description ", 200), Verification: []string{"go test ./internal/store/..."}}},
+	}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := BuildScopedContext(database, recorded.Plan.ItemID, "implementation", 2200)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := BuildScopedContext(database, recorded.Plan.ItemID, "implementation", 2200)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !first.Truncated || len(encoded) > 2200 || first.Bytes != len(encoded) {
+		t.Fatalf("bounded context = truncated %t, bytes %d/%d", first.Truncated, len(encoded), first.Bytes)
+	}
+	if first.Bytes != second.Bytes || len(first.Omitted) != len(second.Omitted) {
+		t.Fatalf("omissions are not stable: %#v / %#v", first.Omitted, second.Omitted)
+	}
+	var foundPlan, foundTask bool
+	for _, reference := range first.Omitted {
+		switch reference.Kind {
+		case "decision-detail", "scope-detail":
+			if reference.Command != "cassor plan show "+fmt.Sprint(recorded.Plan.ID) {
+				t.Fatalf("structured omission reference = %#v", reference)
+			}
+			foundPlan = true
+		case "next-action-description":
+			if reference.Command != "cassor task show "+fmt.Sprint(recorded.Tasks[0].ID) {
+				t.Fatalf("description omission reference = %#v", reference)
+			}
+			foundTask = true
+		}
+	}
+	if !foundPlan || !foundTask || first.NextAction.Description != "" || first.NextAction.ID != recorded.Tasks[0].ID {
+		t.Fatalf("structured omissions = %#v; next action = %#v", first.Omitted, first.NextAction)
 	}
 }
 

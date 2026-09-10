@@ -52,6 +52,8 @@ type ScopedContext struct {
 	Item        ContextItem        `json:"item"`
 	Role        string             `json:"role"`
 	Assignment  ContextAssignment  `json:"assignment"`
+	Scope       PacketScope        `json:"scope"`
+	Decisions   []string           `json:"decisions"`
 	Constraints []string           `json:"constraints"`
 	Criteria    []ContextCriterion `json:"criteria"`
 	NextAction  ContextAction      `json:"next_action"`
@@ -94,6 +96,7 @@ type ContextAction struct {
 	Kind         string   `json:"kind"`
 	ID           int64    `json:"id,omitempty"`
 	Title        string   `json:"title"`
+	Description  string   `json:"description,omitempty"`
 	Status       string   `json:"status"`
 	Command      string   `json:"command"`
 	Verification []string `json:"verification,omitempty"`
@@ -262,7 +265,7 @@ func BuildScopedContext(database *sql.DB, itemID int64, role string, maxBytes in
 	if err != nil {
 		return ScopedContext{}, err
 	}
-	context := ScopedContext{Version: 1, Item: ContextItem{ID: item.ID, Title: item.Title, Status: item.Status, Type: item.FeatureType, State: item.CurrentState}, Role: role, MaxBytes: maxBytes, Constraints: []string{}, Criteria: []ContextCriterion{}, Blockers: []ContextReference{}, Evidence: []ContextReference{}, Related: []ContextReference{}, Artifacts: []ContextReference{}, Omitted: []ContextReference{}}
+	context := ScopedContext{Version: 1, Item: ContextItem{ID: item.ID, Title: item.Title, Status: item.Status, Type: item.FeatureType, State: item.CurrentState}, Role: role, Scope: PacketScope{Included: []string{}, Excluded: []string{}}, Decisions: []string{}, MaxBytes: maxBytes, Constraints: []string{}, Criteria: []ContextCriterion{}, Blockers: []ContextReference{}, Evidence: []ContextReference{}, Related: []ContextReference{}, Artifacts: []ContextReference{}, Omitted: []ContextReference{}}
 	links, err := ListFeatureChangeLinks(database, itemID)
 	if err != nil {
 		return ScopedContext{}, err
@@ -291,6 +294,8 @@ func BuildScopedContext(database *sql.DB, itemID int64, role string, maxBytes in
 	var packet PlanPacket
 	if err := json.Unmarshal([]byte(plan.Content), &packet); err == nil {
 		context.Assignment.Goal = packet.Goal
+		context.Scope = packet.Scope
+		context.Decisions = packet.Decisions
 		context.Constraints = append(context.Constraints, packet.Constraints...)
 	}
 	if len(context.Constraints) == 0 {
@@ -321,7 +326,7 @@ func BuildScopedContext(database *sql.DB, itemID int64, role string, maxBytes in
 			if task.Status == "Blocked" {
 				command = fmt.Sprintf("cassor task resume %d", task.ID)
 			}
-			context.NextAction = ContextAction{Kind: "task", ID: task.ID, Title: task.Title, Status: task.Status, Command: command, Verification: task.Verification}
+			context.NextAction = ContextAction{Kind: "task", ID: task.ID, Title: task.Title, Description: task.Description, Status: task.Status, Command: command, Verification: task.Verification}
 		}
 	}
 	if context.NextAction.Kind == "" {
@@ -355,13 +360,13 @@ func boundScopedContext(context ScopedContext) (ScopedContext, error) {
 	}
 	context.Truncated = true
 	for index := range context.Criteria {
-		context.Omitted = append(context.Omitted, ContextReference{Kind: "criterion-detail", ID: context.Criteria[index].ID, PlanID: context.Assignment.PlanID, ItemID: context.Item.ID, Status: "omitted", Command: fmt.Sprintf("cassor lifecycle criterion show %d", context.Criteria[index].ID)})
+		context.Omitted = appendScopedOmission(context.Omitted, ContextReference{Kind: "criterion-detail", ID: context.Criteria[index].ID, PlanID: context.Assignment.PlanID, ItemID: context.Item.ID, Status: "omitted", Command: fmt.Sprintf("cassor lifecycle criterion show %d", context.Criteria[index].ID)})
 	}
 	for index := range context.Assignment.Tasks {
 		if context.Assignment.Tasks[index].ID == context.NextAction.ID {
 			continue
 		}
-		context.Omitted = append(context.Omitted, ContextReference{Kind: "task-detail", ID: context.Assignment.Tasks[index].ID, PlanID: context.Assignment.PlanID, ItemID: context.Item.ID, Status: "omitted", Command: context.Assignment.Tasks[index].Command})
+		context.Omitted = appendScopedOmission(context.Omitted, ContextReference{Kind: "task-detail", ID: context.Assignment.Tasks[index].ID, PlanID: context.Assignment.PlanID, ItemID: context.Item.ID, Status: "omitted", Command: context.Assignment.Tasks[index].Command})
 	}
 	context.Assignment.Tasks = keepTask(context.Assignment.Tasks, context.NextAction.ID)
 	context.Evidence = nil
@@ -371,9 +376,42 @@ func boundScopedContext(context ScopedContext) (ScopedContext, error) {
 		return context, err
 	}
 	if len(encoded) > context.MaxBytes {
+		// Plan scope and decisions are useful enrichment, but the plan reference
+		// is a stable, compact way to recover them when the packet is tight.
+		if len(context.Decisions) > 0 {
+			context.Omitted = appendScopedOmission(context.Omitted, ContextReference{Kind: "decision-detail", ID: context.Assignment.PlanID, PlanID: context.Assignment.PlanID, ItemID: context.Item.ID, Status: "omitted", Command: context.Assignment.Reference})
+			context.Decisions = nil
+		}
+		if len(context.Scope.Included) > 0 || len(context.Scope.Excluded) > 0 {
+			context.Omitted = appendScopedOmission(context.Omitted, ContextReference{Kind: "scope-detail", ID: context.Assignment.PlanID, PlanID: context.Assignment.PlanID, ItemID: context.Item.ID, Status: "omitted", Command: context.Assignment.Reference})
+			context.Scope = PacketScope{}
+		}
+		encoded, err = stableScopedJSON(&context)
+		if err != nil {
+			return context, err
+		}
+	}
+	if len(encoded) > context.MaxBytes && context.NextAction.Description != "" {
+		context.Omitted = appendScopedOmission(context.Omitted, ContextReference{Kind: "next-action-description", ID: context.NextAction.ID, PlanID: context.Assignment.PlanID, ItemID: context.Item.ID, Status: "omitted", Command: fmt.Sprintf("cassor task show %d", context.NextAction.ID)})
+		context.NextAction.Description = ""
+		encoded, err = stableScopedJSON(&context)
+		if err != nil {
+			return context, err
+		}
+	}
+	if len(encoded) > context.MaxBytes {
 		return context, fmt.Errorf("--max-bytes %d is too small for required context; minimum is %d", context.MaxBytes, len(encoded))
 	}
 	return context, nil
+}
+
+func appendScopedOmission(values []ContextReference, value ContextReference) []ContextReference {
+	for _, existing := range values {
+		if existing.Kind == value.Kind && existing.ID == value.ID && existing.Command == value.Command {
+			return values
+		}
+	}
+	return append(values, value)
 }
 
 func stableScopedJSON(context *ScopedContext) ([]byte, error) {

@@ -2,6 +2,15 @@
 
 Keep every result compact, evidence-based, and free of hidden reasoning.
 
+## Scoped-context contract
+
+Normal scoped-context output includes the approved scope (`included` and
+`excluded`), decisions, constraints, acceptance criteria, and the active
+task's description. It intentionally omits descriptions for unrelated tasks.
+With `--max-bytes`, detail may be omitted; retained fields use stable
+references so the full record can be retrieved with `cassor plan show` or
+`cassor task show`.
+
 ## Discovery result
 
 ```yaml
