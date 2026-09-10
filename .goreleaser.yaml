@@ -10,8 +10,14 @@ builds:
       - -s -w -X github.com/rickcern44/cassor/internal/cmd.Version={{ .Version }} -X github.com/rickcern44/cassor/internal/cmd.Commit={{ .Commit }} -X github.com/rickcern44/cassor/internal/cmd.Date={{ .Date }}
 
 archives:
-  - format: tar.gz
+  - formats: [tar.gz]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
 
 checksum:
   name_template: checksums.txt
+
+changelog:
+  disable: true

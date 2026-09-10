@@ -1,0 +1,46 @@
+name: Validate
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: gittools/actions/gitversion/setup@v4.7.0
+        with:
+          versionSpec: 6.8.2
+
+      - id: gitversion
+        uses: gittools/actions/gitversion/execute@v4.7.0
+
+      - uses: orhun/git-cliff-action@v4.9.0
+        with:
+          version: v2.14.1
+
+      - uses: goreleaser/goreleaser-action@v7.2.3
+        with:
+          distribution: goreleaser
+          version: v2.18.1
+          args: check
+
+      - name: Test
+        run: go test ./...
+
+      - name: Generate unreleased release notes
+        run: git-cliff --config cliff.toml --unreleased --output /tmp/release-notes.md
+
+      - name: Confirm calculated version
+        run: test -n '${{ steps.gitversion.outputs.semVer }}'
