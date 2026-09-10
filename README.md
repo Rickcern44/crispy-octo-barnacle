@@ -7,7 +7,7 @@ repository-local context needed to resume it later.
 The product definition, current implementation boundary, and intended
 direction live in [the PRD](docs/PRD.md).
 
-## Start here
+## Start here 
 
 Initialize Cassor in a Git repository, then inspect its local state:
 
