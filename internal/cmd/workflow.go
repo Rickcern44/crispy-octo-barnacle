@@ -134,7 +134,34 @@ func itemCommand() *cobra.Command {
 	start := itemTransitionCommand("start", "In Progress")
 	complete := itemTransitionCommand("complete", "Done")
 	cancel := itemTransitionCommand("cancel", "Won’t Do")
-	command.AddCommand(add, list, show, update, itemMetadataCommand(), relationshipCommand(), changeLinkCommand(), artifactCommand(), stateCommand(), lifecycleCommand(), ready, start, complete, cancel)
+	next := itemNextCommand()
+	command.AddCommand(add, list, show, update, itemMetadataCommand(), relationshipCommand(), changeLinkCommand(), artifactCommand(), stateCommand(), lifecycleCommand(), ready, start, complete, cancel, next)
+	return command
+}
+
+func itemNextCommand() *cobra.Command {
+	var asJSON bool
+	command := &cobra.Command{Use: "next", Short: "Show the next actionable implementation task", RunE: func(command *cobra.Command, _ []string) error {
+		database, err := databaseForCommand()
+		if err != nil {
+			return err
+		}
+		defer database.Close()
+		selection, err := store.SelectNextTask(database)
+		if err != nil {
+			return err
+		}
+		if asJSON {
+			return output(command, selection, true)
+		}
+		if selection == nil {
+			_, err = fmt.Fprintln(command.OutOrStdout(), "No actionable work found.")
+			return err
+		}
+		_, err = fmt.Fprintf(command.OutOrStdout(), "Item %d %q; task %d %q (%s); next: %s\n", selection.ItemID, selection.ItemTitle, selection.TaskID, selection.TaskTitle, strings.ToLower(selection.TaskStatus), selection.ScopedContextCommand)
+		return err
+	}}
+	command.Flags().BoolVar(&asJSON, "json", false, "emit JSON")
 	return command
 }
 func itemMetadataCommand() *cobra.Command {
@@ -189,13 +216,13 @@ func showItemCommand() *cobra.Command {
 	return command
 }
 func updateItemCommand() *cobra.Command {
-	var title, description, category, horizon, rationale, featureType, currentState string
+	var title, description, category, horizon, rationale, featureType string
 	command := &cobra.Command{Use: "update ID", Args: cobra.ExactArgs(1), RunE: func(command *cobra.Command, args []string) error {
 		value, err := id(args[0])
 		if err != nil {
 			return err
 		}
-		var t, d, c, h, r, ft, cs *string
+		var t, d, c, h, r, ft *string
 		if command.Flags().Changed("title") {
 			t = &title
 		}
@@ -214,10 +241,7 @@ func updateItemCommand() *cobra.Command {
 		if command.Flags().Changed("feature-type") {
 			ft = &featureType
 		}
-		if command.Flags().Changed("current-state") {
-			cs = &currentState
-		}
-		if t == nil && d == nil && c == nil && h == nil && r == nil && ft == nil && cs == nil {
+		if t == nil && d == nil && c == nil && h == nil && r == nil && ft == nil {
 			return fmt.Errorf("provide an item field to update")
 		}
 		database, err := databaseForCommand()
@@ -232,8 +256,8 @@ func updateItemCommand() *cobra.Command {
 				return err
 			}
 		}
-		if ft != nil || cs != nil {
-			item, err = store.UpdateItemDossier(database, value, ft, cs)
+		if ft != nil {
+			item, err = store.UpdateItemDossier(database, value, ft, nil)
 			if err != nil {
 				return err
 			}
@@ -246,7 +270,6 @@ func updateItemCommand() *cobra.Command {
 	command.Flags().StringVar(&horizon, "horizon", "", "Now, Next, or Later")
 	command.Flags().StringVar(&rationale, "rationale", "", "item rationale")
 	command.Flags().StringVar(&featureType, "feature-type", "", "Capability, Change, or Gap")
-	command.Flags().StringVar(&currentState, "current-state", "", "deprecated; accept state through item state accept")
 	return command
 }
 
