@@ -77,6 +77,10 @@ annotated tag, and publishes the GitHub release with macOS and Linux
 AMD64/ARM64 archives and checksums. Protect `main` to require pull requests if
 releases must only originate from merges.
 
+Release runs in two stages: a read-only validation stage for lint, formatting,
+vet, tests, and build; then a release stage with write permission for tagging
+and publishing. Publishing starts only when validation succeeds.
+
 If publishing fails after the tag is created, correct the problem in a new
 commit on `main` after an authorized maintainer removes the incomplete GitHub
 release and tag. The resulting push reruns the workflow; it intentionally
