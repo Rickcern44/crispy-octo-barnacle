@@ -1,5 +1,8 @@
 # Cassor context contract
 
+This operational contract supports the [Cassor PRD](PRD.md)'s token-efficiency
+principle.
+
 `cassor context` returns a bounded navigation summary with counts and stable
 commands for the first ten entries in each queue. It does not include plan
 content, task descriptions, or the backlog payload.

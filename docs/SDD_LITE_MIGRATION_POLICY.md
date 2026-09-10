@@ -1,5 +1,8 @@
 # SDD Lite delivery-contract migration policy
 
+This historical-schema operational reference is subordinate to the current
+[Cassor PRD](PRD.md).
+
 Migration `0011_delivery_contract` adds active plan authority, revision-scoped
 criteria, task verification requirements, task event history, and criterion
 evidence history.

@@ -173,11 +173,9 @@ func writeGuides(repositoryRoot string) error {
 	if err := os.MkdirAll(guidesRoot, 0o755); err != nil {
 		return fmt.Errorf("create generated guide routes: %w", err)
 	}
-	for source, slug := range map[string]string{
-		"CASSOR_CODEX_HANDOFF.md":      "project-handoff",
+	guides := map[string]string{
+		"PRD.md":                       "product-requirements",
 		"CASSOR_PLAN_PACKET_SCHEMA.md": "plan-packet-schema",
-		"CASSOR_SKILLS_SPEC.md":        "skills-specification",
-		"LIVING_APPLICATION_MAP.md":    "living-application-map",
 		"CASSOR_RECOVERY.md":           "recovery",
 		"CASSOR_CONTEXT_CONTRACT.md":   "context-contract",
 		"SDD_LITE_MIGRATION_POLICY.md": "migration-policy",
@@ -185,7 +183,23 @@ func writeGuides(repositoryRoot string) error {
 		"WORKFLOW_GUIDE.md":            "workflow",
 		"RESUME_WORK.md":               "resume-work",
 		"ROADMAP_GUIDE.md":             "roadmap-guide",
-	} {
+	}
+	validSlugs := map[string]bool{}
+	for _, slug := range guides {
+		validSlugs[slug] = true
+	}
+	entries, err := os.ReadDir(guidesRoot)
+	if err != nil {
+		return fmt.Errorf("list generated guide routes: %w", err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() && !validSlugs[entry.Name()] {
+			if err := os.RemoveAll(filepath.Join(guidesRoot, entry.Name())); err != nil {
+				return fmt.Errorf("remove retired generated guide route: %w", err)
+			}
+		}
+	}
+	for source, slug := range guides {
 		content, err := os.ReadFile(filepath.Join(repositoryRoot, "docs", source))
 		if err != nil {
 			return fmt.Errorf("read %s: %w", source, err)
@@ -198,7 +212,7 @@ func writeGuides(repositoryRoot string) error {
 		if err := os.MkdirAll(filepath.Dir(output), 0o755); err != nil {
 			return fmt.Errorf("create guide route directory: %w", err)
 		}
-		if err := os.WriteFile(output, append([]byte(frontmatter(strings.TrimSuffix(source, ".md"), "Repository reference documentation.")+"\n"), content...), 0o644); err != nil {
+		if err := os.WriteFile(output, []byte(frontmatter(strings.TrimSuffix(source, ".md"), "Repository reference documentation.")+"\n"+guideContent(content)), 0o644); err != nil {
 			return fmt.Errorf("write generated guide route: %w", err)
 		}
 	}
@@ -306,10 +320,8 @@ func renderSources(data roadmapData, repositoryRoot string) (map[string][]byte, 
 	}
 	if repositoryRoot != "" {
 		for source, target := range map[string]string{
-			"CASSOR_CODEX_HANDOFF.md":      "guides/project-handoff.md",
+			"PRD.md":                       "guides/product-requirements.md",
 			"CASSOR_PLAN_PACKET_SCHEMA.md": "guides/plan-packet-schema.md",
-			"CASSOR_SKILLS_SPEC.md":        "guides/skills-specification.md",
-			"LIVING_APPLICATION_MAP.md":    "guides/living-application-map.md",
 			"CASSOR_RECOVERY.md":           "guides/recovery.md",
 			"CASSOR_CONTEXT_CONTRACT.md":   "guides/context-contract.md",
 			"SDD_LITE_MIGRATION_POLICY.md": "guides/migration-policy.md",
@@ -322,7 +334,7 @@ func renderSources(data roadmapData, repositoryRoot string) (map[string][]byte, 
 			if err != nil {
 				return nil, fmt.Errorf("read %s: %w", source, err)
 			}
-			files[target] = []byte(frontmatter(strings.TrimSuffix(source, ".md"), "Repository reference documentation.") + "\n" + string(content))
+			files[target] = []byte(frontmatter(strings.TrimSuffix(source, ".md"), "Repository reference documentation.") + "\n" + guideContent(content))
 		}
 	}
 	return files, nil
@@ -444,14 +456,17 @@ func decodeLinks(raw string) []string {
 
 func documentationLink(path string) string {
 	routes := map[string]string{
-		"docs/CASSOR_CODEX_HANDOFF.md":      "/guides/project-handoff/",
+		"docs/PRD.md":                       "/guides/product-requirements/",
 		"docs/CASSOR_PLAN_PACKET_SCHEMA.md": "/guides/plan-packet-schema/",
-		"docs/CASSOR_SKILLS_SPEC.md":        "/guides/skills-specification/",
 	}
 	if route, ok := routes[path]; ok {
 		return "[" + markdownText(path) + "](" + route + ")"
 	}
 	return "`" + strings.ReplaceAll(path, "`", "") + "`"
+}
+
+func guideContent(content []byte) string {
+	return strings.ReplaceAll(string(content), "](PRD.md)", "](/guides/product-requirements/)")
 }
 
 func frontmatter(title, description string) string {

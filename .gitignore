@@ -1,7 +1,9 @@
 .cassor/
 .DS_Store
 bin/
+dist/
 coverage.out
+docs/roadmap/
 docs-site/node_modules/
 docs-site/.astro/
 docs-site/.svelte-kit/

@@ -1,5 +1,8 @@
 # Cassor recovery and checkout ownership
 
+This is an operational reference for the repository-local state described in
+the [Cassor PRD](PRD.md).
+
 SQLite in `.cassor/cassor.db` is the authoritative state for one checkout.
 Generated files under `docs/roadmap` are a view and can be rebuilt with
 `cassor site build`. A branch or worktree does not automatically share state

@@ -1,19 +1,33 @@
 # Cassor
 
-Cassor is a lightweight, agent-agnostic CLI for planning approved work, tracking roadmap state, and generating a static roadmap.
+Cassor is a skill-first workflow for agent-assisted software development. It
+helps a person approve concise, verifiable work while keeping the durable,
+repository-local context needed to resume it later.
+
+The product definition, current implementation boundary, and intended
+direction live in [the PRD](docs/PRD.md).
+
+## Start here
+
+Initialize Cassor in a Git repository, then inspect its local state:
+
+```sh
+cassor init
+cassor check
+cassor context --json
+```
+
+Record a user-approved plan packet before implementation begins:
+
+```sh
+cassor plan record --file plan.json --approve --approved-by-user
+```
+
+See [Getting started](docs/GETTING_STARTED.md), [the workflow guide](docs/WORKFLOW_GUIDE.md), and [the context contract](docs/CASSOR_CONTEXT_CONTRACT.md) for the operational details.
 
 ## Development
 
-Cassor currently requires Go 1.26 or newer.
-
-```sh
-go test ./...
-go run . --help
-```
-
-## Local builds and versions
-
-Use the repeatable local targets:
+Cassor requires Go 1.26 or newer.
 
 ```sh
 make test
@@ -22,39 +36,19 @@ bin/cassor version
 make check
 ```
 
-The binary reports its Git-derived version, commit, and UTC build date. Untagged
-builds use the current Git description; a `-dirty` suffix means local changes
-were included. Release versions are created by tagging a clean, verified commit
-with SemVer, for example `git tag -a v0.1.0 -m "v0.1.0"`, then running
-`make build`.
+`make snapshot` writes local release-shaped artifacts to `dist/`; those files
+are build output and are not committed. Publishing is intentionally not
+automated.
 
-For release-shaped local artifacts, install GoReleaser and run `make release-check`
-followed by `make snapshot`. Snapshot artifacts and checksums are written to
-`dist/`; tagged builds use the annotated `vX.Y.Z` tag. Publishing is intentionally
-not automated yet.
+## Optional documentation site
 
-## Developer documentation site
+`cassor site build` generates a static snapshot under `docs/roadmap/`; it is a
+derived view and is not committed. `cassor site serve` previews it locally.
 
-Cassor generates a static roadmap into `docs/roadmap/`. In an ordinary
-initialized repository, `cassor site build` uses a dependency-free portable
-page and needs no Node installation or project documentation files. The Cassor
-source repository includes an enhanced SvelteKit developer site; Node 20 or
-newer is required only for that richer workspace.
-
-```sh
-go run . site build
-go run . site serve
-```
-
-For live documentation development, use the SvelteKit workspace:
+The Cassor source repository also includes an enhanced SvelteKit documentation
+workspace. Node 20 or newer is required only for that workspace:
 
 ```sh
 cd docs-site
 npm run dev
 ```
-
-When building for a GitHub Pages project URL, set its repository path before
-running `cassor site build`, for example `SITE_BASE=/cassor go run . site build`.
-Deployment automation is intentionally not configured yet.
-
-The project contract and phased delivery plan live in [`docs/CASSOR_CODEX_HANDOFF.md`](docs/CASSOR_CODEX_HANDOFF.md).

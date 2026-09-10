@@ -20,10 +20,16 @@ func TestBuildGeneratesDeterministicFeatureRoutes(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, "docs"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"CASSOR_CODEX_HANDOFF.md", "CASSOR_PLAN_PACKET_SCHEMA.md", "CASSOR_SKILLS_SPEC.md", "LIVING_APPLICATION_MAP.md", "CASSOR_RECOVERY.md", "CASSOR_CONTEXT_CONTRACT.md", "SDD_LITE_MIGRATION_POLICY.md", "GETTING_STARTED.md", "WORKFLOW_GUIDE.md", "RESUME_WORK.md", "ROADMAP_GUIDE.md"} {
+	if err := os.MkdirAll(filepath.Join(root, sourceGuidesDirectory, "retired-guide"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"PRD.md", "CASSOR_PLAN_PACKET_SCHEMA.md", "CASSOR_RECOVERY.md", "CASSOR_CONTEXT_CONTRACT.md", "SDD_LITE_MIGRATION_POLICY.md", "GETTING_STARTED.md", "WORKFLOW_GUIDE.md", "RESUME_WORK.md", "ROADMAP_GUIDE.md"} {
 		if err := os.WriteFile(filepath.Join(root, "docs", name), []byte("# "+name+"\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if err := os.WriteFile(filepath.Join(root, "docs", "GETTING_STARTED.md"), []byte("[Product requirements](PRD.md)\n"), 0o644); err != nil {
+		t.Fatal(err)
 	}
 	if err := config.Write(config.Path(state), config.Config{Name: "Demo"}); err != nil {
 		t.Fatal(err)
@@ -95,19 +101,29 @@ func TestBuildGeneratesDeterministicFeatureRoutes(t *testing.T) {
 	if !strings.Contains(string(initial), "change_links") {
 		t.Fatal("roadmap data does not include capability change links")
 	}
-	guide, err := os.ReadFile(filepath.Join(root, sourceGuidesDirectory, "project-handoff", "+page.md"))
+	guide, err := os.ReadFile(filepath.Join(root, sourceGuidesDirectory, "product-requirements", "+page.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(guide), "CASSOR_CODEX_HANDOFF.md") {
+	if !strings.Contains(string(guide), "PRD.md") {
 		t.Fatal("generated guide route does not include source documentation")
 	}
-	livingMapGuide, err := os.ReadFile(filepath.Join(root, sourceGuidesDirectory, "living-application-map", "+page.md"))
+	contextGuide, err := os.ReadFile(filepath.Join(root, sourceGuidesDirectory, "context-contract", "+page.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(livingMapGuide), "LIVING_APPLICATION_MAP.md") {
-		t.Fatal("generated guide route does not include the living application map")
+	if !strings.Contains(string(contextGuide), "CASSOR_CONTEXT_CONTRACT.md") {
+		t.Fatal("generated guide route does not include the context contract")
+	}
+	gettingStartedGuide, err := os.ReadFile(filepath.Join(root, sourceGuidesDirectory, "getting-started", "+page.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(gettingStartedGuide), "](PRD.md)") || !strings.Contains(string(gettingStartedGuide), "](/guides/product-requirements/)") {
+		t.Fatal("generated guide route does not rewrite the PRD link")
+	}
+	if _, err := os.Stat(filepath.Join(root, sourceGuidesDirectory, "retired-guide")); !os.IsNotExist(err) {
+		t.Fatal("generated guide route did not remove retired guide directory")
 	}
 }
 

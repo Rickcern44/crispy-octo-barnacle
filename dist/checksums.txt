@@ -1,4 +1,0 @@
-c3e567ebaf85c73c3d3aacd9cb5749833418c869880aaa2a90580f73a31a23b1  cassor_0.0.0-SNAPSHOT-none_darwin_amd64.tar.gz
-c830e38aa6a83bcf511ac274f0773a26a27bc5cf5be237033e147f2379c2dc67  cassor_0.0.0-SNAPSHOT-none_darwin_arm64.tar.gz
-e46259e901eeeb79e3d755b6de4c9a21cc892d95d9805306d804947bb7a3b814  cassor_0.0.0-SNAPSHOT-none_linux_amd64.tar.gz
-4a6be9f2e2b956be84b612c2a0b8fe581a9db365e7b3b488d83a872afca2a3ad  cassor_0.0.0-SNAPSHOT-none_linux_arm64.tar.gz

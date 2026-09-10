@@ -1,5 +1,8 @@
 # Cassor Plan Packet Schema
 
+This is the machine-readable approval contract behind the concise workflow in
+the [Cassor PRD](PRD.md).
+
 `cassor plan record --file packet.json --approve --approved-by-user` atomically records a user-approved plan revision and its pending tasks.
 
 The packet is JSON. It must have a non-empty `goal`, no `open_questions`, and at least one task. A new roadmap item requires `title`, `category`, and `horizon`; alternatively, set `roadmap_item.id` to an existing approved item.

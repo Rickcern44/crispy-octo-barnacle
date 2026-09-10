@@ -1,5 +1,7 @@
 # Plan and approve work
 
+The [Cassor PRD](PRD.md) defines why this concise approval boundary exists.
+
 Cassor records a plan before implementation begins. Inspect current work, then record the approved packet:
 
 ```sh
@@ -15,4 +17,6 @@ cassor task complete TASK_ID --outcome "Verification evidence"
 cassor check
 ```
 
-Request a revised plan before changing scope, public behavior, schemas, dependencies, or acceptance criteria.
+Request a revised plan before changing scope, public behavior, schemas,
+dependencies, or acceptance criteria. Use only the discovery and documentation
+needed for the risk and uncertainty of the work at hand.

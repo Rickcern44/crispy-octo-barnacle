@@ -28,22 +28,22 @@
 </script>
 
 <svelte:head>
-	<title>Application map · {roadmap.project_name}</title>
-	<meta name="description" content="Explore Cassor capabilities, current behavior, known relationships, and delivered changes." />
+	<title>Current state · {roadmap.project_name}</title>
+	<meta name="description" content="Inspect the current capability records and delivery history in local Cassor state." />
 </svelte:head>
 
 <main class="mx-auto max-w-6xl px-5 py-8 sm:px-8 lg:py-12">
 	<div class="max-w-3xl">
-		<p class="text-xs font-semibold tracking-[0.22em] text-cassor-400">CASSOR · APPLICATION MAP</p>
-		<h1 class="mt-3 text-4xl font-bold tracking-tight text-white sm:text-5xl">What Cassor can do</h1>
-		<p class="mt-4 text-lg leading-8 text-slate-300">Capabilities describe the product as it exists today. Select one to see its current behavior, linked delivery changes, and recorded relationships.</p>
+		<p class="text-xs font-semibold tracking-[0.22em] text-cassor-400">CASSOR · CURRENT STATE</p>
+		<h1 class="mt-3 text-4xl font-bold tracking-tight text-white sm:text-5xl">Recorded product state</h1>
+		<p class="mt-4 text-lg leading-8 text-slate-300">This optional view shows the capability records, delivery changes, and relationships currently stored in local Cassor state. It is a derived view, not the product definition.</p>
 	</div>
 
 	{#if capabilities.length === 0}
 		<section class="mt-10 rounded-2xl border border-dashed border-slate-700 bg-slate-900/50 p-8" aria-labelledby="empty-title">
 			<h2 id="empty-title" class="text-xl font-bold text-white">Capability records are not populated yet</h2>
-			<p class="mt-3 max-w-2xl leading-7 text-slate-300">The roadmap contains delivery changes, but no enduring capability records are currently available. Once capabilities are accepted, they will appear here with their supporting delivery history.</p>
-			<a class="mt-5 inline-flex rounded-lg bg-cyan-400 px-4 py-2 font-semibold text-slate-950 hover:bg-cyan-300" href={`${base}/guides/living-application-map/`}>Read the application map model</a>
+			<p class="mt-3 max-w-2xl leading-7 text-slate-300">The roadmap contains delivery changes, but no enduring capability records are currently available. The PRD explains the skill-first workflow and the intended product model.</p>
+			<a class="mt-5 inline-flex rounded-lg bg-cyan-400 px-4 py-2 font-semibold text-slate-950 hover:bg-cyan-300" href={`${base}/guides/product-requirements/`}>Read the product requirements</a>
 		</section>
 	{:else}
 		<div class="mt-10 space-y-10">
