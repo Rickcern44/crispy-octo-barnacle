@@ -6,16 +6,51 @@ on:
       - main
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release
   cancel-in-progress: false
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: golangci/golangci-lint-action@v9.3.0
+        with:
+          version: v2.13.2
+
+      - name: Check formatting
+        run: |
+          mapfile -t files < <(git ls-files '*.go')
+          unformatted="$(gofmt -l "${files[@]}")"
+          test -z "${unformatted}" || {
+            echo "Run gofmt on these files:" >&2
+            echo "${unformatted}" >&2
+            exit 1
+          }
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build
+        run: go build ./...
+
   release:
+    needs: validate
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -56,29 +91,6 @@ jobs:
             exit 1
           fi
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
-
-      - uses: golangci/golangci-lint-action@v9.3.0
-        with:
-          version: v2.13.2
-
-      - name: Check formatting
-        run: |
-          mapfile -t files < <(git ls-files '*.go')
-          unformatted="$(gofmt -l "${files[@]}")"
-          test -z "${unformatted}" || {
-            echo "Run gofmt on these files:" >&2
-            echo "${unformatted}" >&2
-            exit 1
-          }
-
-      - name: Vet
-        run: go vet ./...
-
-      - name: Test
-        run: go test ./...
-
-      - name: Build
-        run: go build ./...
 
       - name: Generate release notes
         uses: orhun/git-cliff-action@v4.9.0
