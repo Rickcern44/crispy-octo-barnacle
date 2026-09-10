@@ -23,7 +23,7 @@ Record a user-approved plan packet before implementation begins:
 cassor plan record --file plan.json --approve --approved-by-user
 ```
 
-See [Getting started](docs/GETTING_STARTED.md), [the workflow guide](docs/WORKFLOW_GUIDE.md), and [the context contract](docs/CASSOR_CONTEXT_CONTRACT.md) for the operational details.
+Use `cassor --help` and its command-specific help for operational details.
 
 ## Development
 

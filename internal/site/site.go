@@ -173,17 +173,7 @@ func writeGuides(repositoryRoot string) error {
 	if err := os.MkdirAll(guidesRoot, 0o755); err != nil {
 		return fmt.Errorf("create generated guide routes: %w", err)
 	}
-	guides := map[string]string{
-		"PRD.md":                       "product-requirements",
-		"CASSOR_PLAN_PACKET_SCHEMA.md": "plan-packet-schema",
-		"CASSOR_RECOVERY.md":           "recovery",
-		"CASSOR_CONTEXT_CONTRACT.md":   "context-contract",
-		"SDD_LITE_MIGRATION_POLICY.md": "migration-policy",
-		"GETTING_STARTED.md":           "getting-started",
-		"WORKFLOW_GUIDE.md":            "workflow",
-		"RESUME_WORK.md":               "resume-work",
-		"ROADMAP_GUIDE.md":             "roadmap-guide",
-	}
+	guides := map[string]string{"PRD.md": "product-requirements"}
 	validSlugs := map[string]bool{}
 	for _, slug := range guides {
 		validSlugs[slug] = true
@@ -212,7 +202,7 @@ func writeGuides(repositoryRoot string) error {
 		if err := os.MkdirAll(filepath.Dir(output), 0o755); err != nil {
 			return fmt.Errorf("create guide route directory: %w", err)
 		}
-		if err := os.WriteFile(output, []byte(frontmatter(strings.TrimSuffix(source, ".md"), "Repository reference documentation.")+"\n"+guideContent(content)), 0o644); err != nil {
+		if err := os.WriteFile(output, append([]byte(frontmatter(strings.TrimSuffix(source, ".md"), "Repository reference documentation.")+"\n"), content...), 0o644); err != nil {
 			return fmt.Errorf("write generated guide route: %w", err)
 		}
 	}
@@ -319,22 +309,12 @@ func renderSources(data roadmapData, repositoryRoot string) (map[string][]byte, 
 		files[filepath.Join("roadmap", fmt.Sprintf("rm-%d.md", item.ID))] = []byte(featurePage(item))
 	}
 	if repositoryRoot != "" {
-		for source, target := range map[string]string{
-			"PRD.md":                       "guides/product-requirements.md",
-			"CASSOR_PLAN_PACKET_SCHEMA.md": "guides/plan-packet-schema.md",
-			"CASSOR_RECOVERY.md":           "guides/recovery.md",
-			"CASSOR_CONTEXT_CONTRACT.md":   "guides/context-contract.md",
-			"SDD_LITE_MIGRATION_POLICY.md": "guides/migration-policy.md",
-			"GETTING_STARTED.md":           "guides/getting-started.md",
-			"WORKFLOW_GUIDE.md":            "guides/workflow.md",
-			"RESUME_WORK.md":               "guides/resume-work.md",
-			"ROADMAP_GUIDE.md":             "guides/roadmap-guide.md",
-		} {
+		for source, target := range map[string]string{"PRD.md": "guides/product-requirements.md"} {
 			content, err := os.ReadFile(filepath.Join(repositoryRoot, "docs", source))
 			if err != nil {
 				return nil, fmt.Errorf("read %s: %w", source, err)
 			}
-			files[target] = []byte(frontmatter(strings.TrimSuffix(source, ".md"), "Repository reference documentation.") + "\n" + guideContent(content))
+			files[target] = []byte(frontmatter(strings.TrimSuffix(source, ".md"), "Repository reference documentation.") + "\n" + string(content))
 		}
 	}
 	return files, nil
@@ -455,18 +435,10 @@ func decodeLinks(raw string) []string {
 }
 
 func documentationLink(path string) string {
-	routes := map[string]string{
-		"docs/PRD.md":                       "/guides/product-requirements/",
-		"docs/CASSOR_PLAN_PACKET_SCHEMA.md": "/guides/plan-packet-schema/",
-	}
-	if route, ok := routes[path]; ok {
-		return "[" + markdownText(path) + "](" + route + ")"
+	if path == "docs/PRD.md" {
+		return "[" + markdownText(path) + "](/guides/product-requirements/)"
 	}
 	return "`" + strings.ReplaceAll(path, "`", "") + "`"
-}
-
-func guideContent(content []byte) string {
-	return strings.ReplaceAll(string(content), "](PRD.md)", "](/guides/product-requirements/)")
 }
 
 func frontmatter(title, description string) string {
