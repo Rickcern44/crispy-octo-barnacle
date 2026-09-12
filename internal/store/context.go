@@ -19,6 +19,7 @@ type Context struct {
 	InFlightChanges   []ContextReference `json:"in_flight_changes"`
 	PlannedWork       []ContextReference `json:"planned_work"`
 	KnownGaps         []ContextReference `json:"known_gaps"`
+	Epics             []ContextReference `json:"epics"`
 	Counts            ContextCounts      `json:"counts"`
 	Truncated         bool               `json:"truncated"`
 }
@@ -33,6 +34,7 @@ type ContextCounts struct {
 	InFlightChanges   int `json:"in_flight_changes"`
 	PlannedWork       int `json:"planned_work"`
 	KnownGaps         int `json:"known_gaps"`
+	Epics             int `json:"epics"`
 }
 
 type ContextReference struct {
@@ -61,6 +63,7 @@ type ScopedContext struct {
 	Evidence    []ContextReference `json:"evidence_references"`
 	Related     []ContextReference `json:"related_features"`
 	Artifacts   []ContextReference `json:"dossier_artifacts"`
+	Epic        *ContextReference  `json:"epic,omitempty"`
 	Omitted     []ContextReference `json:"omitted_details,omitempty"`
 	Truncated   bool               `json:"truncated"`
 	MaxBytes    int                `json:"max_bytes"`
@@ -142,8 +145,36 @@ func CompactContext(database *sql.DB) (Context, error) {
 	if err != nil {
 		return context, err
 	}
-	context.Truncated = context.Counts.ActiveTasks > len(context.ActiveTasks) || context.Counts.ProposedItems > len(context.ProposedItems) || context.Counts.PlansAwaiting > len(context.PlansAwaiting) || context.Counts.BlockedTasks > len(context.BlockedTasks) || context.Counts.RecentlyCompleted > len(context.RecentlyCompleted) || context.Counts.Capabilities > len(context.Capabilities) || context.Counts.InFlightChanges > len(context.InFlightChanges) || context.Counts.PlannedWork > len(context.PlannedWork) || context.Counts.KnownGaps > len(context.KnownGaps)
+	context.Epics, context.Counts.Epics, err = navigationEpics(database, 10)
+	if err != nil {
+		return context, err
+	}
+	context.Truncated = context.Counts.ActiveTasks > len(context.ActiveTasks) || context.Counts.ProposedItems > len(context.ProposedItems) || context.Counts.PlansAwaiting > len(context.PlansAwaiting) || context.Counts.BlockedTasks > len(context.BlockedTasks) || context.Counts.RecentlyCompleted > len(context.RecentlyCompleted) || context.Counts.Capabilities > len(context.Capabilities) || context.Counts.InFlightChanges > len(context.InFlightChanges) || context.Counts.PlannedWork > len(context.PlannedWork) || context.Counts.KnownGaps > len(context.KnownGaps) || context.Counts.Epics > len(context.Epics)
 	return context, nil
+}
+
+func navigationEpics(database *sql.DB, limit int) ([]ContextReference, int, error) {
+	var count int
+	if err := database.QueryRow(`SELECT COUNT(*) FROM epics`).Scan(&count); err != nil {
+		return nil, 0, err
+	}
+	rows, err := database.Query(`SELECT id,title FROM epics ORDER BY updated_at DESC,id DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	values := []ContextReference{}
+	for rows.Next() {
+		var value ContextReference
+		if err := rows.Scan(&value.ID, &value.Title); err != nil {
+			return nil, 0, err
+		}
+		value.Kind = "epic"
+		value.Status = "group"
+		value.Command = fmt.Sprintf("cassor epic show %d", value.ID)
+		values = append(values, value)
+	}
+	return values, count, rows.Err()
 }
 
 func navigationItems(database *sql.DB, status string, limit int) ([]ContextReference, int, error) {
@@ -266,6 +297,13 @@ func BuildScopedContext(database *sql.DB, itemID int64, role string, maxBytes in
 		return ScopedContext{}, err
 	}
 	context := ScopedContext{Version: 1, Item: ContextItem{ID: item.ID, Title: item.Title, Status: item.Status, Type: item.FeatureType, State: item.CurrentState}, Role: role, Scope: PacketScope{Included: []string{}, Excluded: []string{}}, Decisions: []string{}, MaxBytes: maxBytes, Constraints: []string{}, Criteria: []ContextCriterion{}, Blockers: []ContextReference{}, Evidence: []ContextReference{}, Related: []ContextReference{}, Artifacts: []ContextReference{}, Omitted: []ContextReference{}}
+	if item.EpicID != nil {
+		epic, err := GetEpic(database, *item.EpicID)
+		if err != nil {
+			return ScopedContext{}, err
+		}
+		context.Epic = &ContextReference{Kind: "epic", ID: epic.ID, Title: epic.Title, Status: "parent", Command: fmt.Sprintf("cassor epic show %d", epic.ID)}
+	}
 	links, err := ListFeatureChangeLinks(database, itemID)
 	if err != nil {
 		return ScopedContext{}, err

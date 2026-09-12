@@ -118,6 +118,7 @@ func workflowCheck(database *sql.DB) error {
 		{`SELECT COUNT(*) FROM feature_change_links l JOIN roadmap_items c ON c.id=l.change_item_id JOIN roadmap_items p ON p.id=l.capability_item_id WHERE c.feature_type<>'Change' OR p.feature_type<>'Capability'`, "change links must connect Changes to Capabilities"},
 		{`SELECT COUNT(*) FROM capability_state_history h JOIN roadmap_items c ON c.id=h.capability_item_id LEFT JOIN roadmap_items s ON s.id=h.source_change_item_id WHERE c.feature_type<>'Capability' OR (h.source_change_item_id IS NOT NULL AND s.feature_type<>'Change') OR trim(h.state)='' OR trim(h.accepted_by)='' OR trim(h.accepted_at)=''`, "capability state history must be attributed and type-safe"},
 		{`SELECT COUNT(*) FROM dossier_artifacts WHERE status='Accepted' AND (trim(evidence)='' OR accepted_at IS NULL OR trim(COALESCE(accepted_by,''))='')`, "accepted dossier artifacts need evidence and attribution"},
+		{`SELECT COUNT(*) FROM roadmap_items i LEFT JOIN epics e ON e.id=i.epic_id WHERE i.epic_id IS NOT NULL AND e.id IS NULL`, "features with an Epic parent must reference an existing Epic"},
 	}
 	for _, check := range checks {
 		var count int

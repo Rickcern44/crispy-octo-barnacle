@@ -94,10 +94,10 @@ tests as of this document's review date.
 ### Local state and command surface
 
 - `cassor init` discovers a Git repository and creates `.cassor/` state.
-- SQLite stores configurable categories, roadmap items, plan revisions, tasks,
-  lifecycle records, acceptance criteria, evidence, feature relationships, and
-  portability data.
-- The CLI supports item, plan, task, lifecycle, context, audit, validation,
+- SQLite stores configurable categories, Epics, roadmap items, plan revisions,
+  tasks, lifecycle records, acceptance criteria, evidence, feature
+  relationships, and portability data.
+- The CLI supports Epic, item, plan, task, lifecycle, context, audit, validation,
   skill, export/import, benchmark, and static-site commands.
 - State is repository-local. `cassor export` and `cassor import` provide a
   versioned, deterministic transfer and recovery boundary.
@@ -110,8 +110,9 @@ verification requirements. Only one approved revision is active for an item;
 completion checks active-plan tasks and required criteria. Verification and
 waiver evidence are retained, and blocked tasks can resume with their history.
 
-The internal names are implementation details. They do not yet expose a
-first-class Epic model.
+Features may have zero or one Epic parent. Epics are optional grouping records:
+they do not own plans or tasks, and Cassor does not infer Epic completion from
+child Feature state.
 
 ### Context management
 
@@ -161,9 +162,9 @@ Epic (optional)
 - A **Task** is a bounded unit of investigation, implementation, or
   verification with a clear completion signal.
 
-The current persisted model is a foundation for this experience, not a claim
-that the Epic model is already implemented. Any schema or command migration
-requires a separately approved delivery plan.
+The persisted model supports this hierarchy while retaining the current plan
+and task guarantees for Features. Existing data remains valid as ungrouped
+Features after migration.
 
 ## Interaction model
 
