@@ -47,6 +47,7 @@ type roadmapData struct {
 	GeneratedAt      string                        `json:"generated_at"`
 	ProjectName      string                        `json:"project_name"`
 	Items            []store.Item                  `json:"items"`
+	Epics            []store.Epic                  `json:"epics"`
 	Plans            []planView                    `json:"plans"`
 	Tasks            []store.Task                  `json:"tasks"`
 	Reports          []store.FeatureReport         `json:"reports"`
@@ -227,6 +228,10 @@ func loadData(database *sql.DB, projectName string) (roadmapData, error) {
 	if err != nil {
 		return roadmapData{}, err
 	}
+	epics, err := store.ListEpics(database)
+	if err != nil {
+		return roadmapData{}, err
+	}
 	rows, err := database.Query(`SELECT p.id,p.roadmap_item_id,p.revision,p.content,p.status,p.active,p.created_at,p.approved_at,p.approval_note,i.title FROM plan_revisions p JOIN roadmap_items i ON i.id=p.roadmap_item_id ORDER BY p.roadmap_item_id,p.revision`)
 	if err != nil {
 		return roadmapData{}, err
@@ -300,7 +305,7 @@ func loadData(database *sql.DB, projectName string) (roadmapData, error) {
 		}
 		completed = append(completed, task)
 	}
-	return roadmapData{ProjectName: projectName, Items: items, Plans: plans, Tasks: tasks, Reports: reports, Phases: phases, Criteria: criteria, Relationships: relationships, ChangeLinks: changeLinks, CapabilityStates: capabilityStates, Artifacts: artifacts, Completed: completed}, completedRows.Err()
+	return roadmapData{ProjectName: projectName, Items: items, Epics: epics, Plans: plans, Tasks: tasks, Reports: reports, Phases: phases, Criteria: criteria, Relationships: relationships, ChangeLinks: changeLinks, CapabilityStates: capabilityStates, Artifacts: artifacts, Completed: completed}, completedRows.Err()
 }
 
 func renderSources(data roadmapData, repositoryRoot string) (map[string][]byte, error) {

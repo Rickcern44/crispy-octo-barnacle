@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import { page } from '$app/state';
-	import { artifactsForItem, capabilityForChange, changesForCapability, displayProgress, lifecycleForItem, plansForItem, relationshipsForItem, reportsForItem, roadmap, specificationsForItem, stateHistoryForCapability } from '$lib/roadmap';
+	import { artifactsForItem, capabilityForChange, changesForCapability, displayProgress, epicForItem, featuresForEpic, lifecycleForItem, plansForItem, relationshipsForItem, reportsForItem, roadmap, specificationsForItem, stateHistoryForCapability } from '$lib/roadmap';
 
 	const itemID = Number((page.params.id ?? '').replace('rm-', ''));
 	const item = roadmap.items.find((candidate) => candidate.id === itemID);
@@ -14,6 +14,8 @@
 	const linkedCapabilities = item?.feature_type === 'Change' ? capabilityForChange(itemID) : [];
 	const stateHistory = item?.feature_type === 'Capability' ? stateHistoryForCapability(itemID) : [];
 	const artifacts = artifactsForItem(itemID);
+	const epic = item ? epicForItem(item) : undefined;
+	const siblingFeatures = epic ? featuresForEpic(epic.id) : [];
 </script>
 
 <svelte:head><title>{item ? `RM-${item.id} · ${item.title}` : 'Roadmap item'}</title></svelte:head>
@@ -22,6 +24,7 @@
 	<a class="text-sm font-semibold text-cyan-300 hover:text-cyan-200" href={`${base}/`}>← Back to roadmap</a>
 	{#if item}
 		<header class="mt-8 border-b border-slate-800 pb-8"><p class="text-sm font-semibold tracking-[0.18em] text-cyan-400">RM-{item.id} · {item.feature_type} · {item.status}</p><h1 class="mt-3 text-4xl font-bold tracking-tight text-white sm:text-5xl">{item.title}</h1><p class="mt-5 text-lg leading-8 text-slate-300">{item.technical_summary || item.description || item.rationale}</p></header>
+		{#if epic}<section class="mt-7 rounded-xl border border-cyan-400/30 bg-cyan-400/5 p-4"><p class="text-xs font-semibold uppercase tracking-wider text-cyan-300">Epic</p><h2 class="mt-2 text-xl font-bold text-white">{epic.title}</h2><p class="mt-2 text-sm text-slate-300">{epic.description || 'This Feature belongs to the Epic.'}</p><p class="mt-3 text-sm text-slate-400">{siblingFeatures.length} Feature{siblingFeatures.length === 1 ? '' : 's'} in this Epic.</p></section>{/if}
 		<section class="mt-9 grid gap-4 sm:grid-cols-2"><div class="rounded-xl border border-slate-800 bg-slate-900/70 p-5"><p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Delivery</p><dl class="mt-3 space-y-2 text-sm"><div class="flex justify-between gap-3"><dt class="text-slate-400">Progress</dt><dd>{displayProgress(item)}%</dd></div><div class="flex justify-between gap-3"><dt class="text-slate-400">Target</dt><dd>{item.target_date || 'Unscheduled'}</dd></div><div class="flex justify-between gap-3"><dt class="text-slate-400">Horizon</dt><dd>{item.horizon}</dd></div></dl></div><div class="rounded-xl border border-slate-800 bg-slate-900/70 p-5"><p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Ownership</p><dl class="mt-3 space-y-2 text-sm"><div class="flex justify-between gap-3"><dt class="text-slate-400">Team</dt><dd>{item.team || 'Unassigned'}</dd></div><div class="flex justify-between gap-3"><dt class="text-slate-400">Lead</dt><dd>{item.lead_engineer || 'Unassigned'}</dd></div><div class="flex justify-between gap-3"><dt class="text-slate-400">Priority</dt><dd>{item.priority || 'Unassigned'}</dd></div></dl></div></section>
 		<section class="mt-9 rounded-xl border border-slate-800 bg-slate-900/70 p-5"><p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Current product state</p><p class="mt-3 leading-7 text-slate-300">{item.current_state || 'Not yet documented.'}</p></section>
 		{#if linkedChanges.length > 0}<section class="mt-9"><h2 class="text-2xl font-bold text-white">Delivery changes for this capability</h2><ul class="mt-4 space-y-3">{#each linkedChanges as link}<li class="rounded-xl border border-slate-800 bg-slate-900/70 p-4"><a class="font-medium text-cyan-300 hover:text-cyan-200" href={`${base}/roadmap/rm-${link.change_item_id}/`}>{link.change_item_title}</a><span class="ml-2 text-sm text-slate-400">linked delivery change</span></li>{/each}</ul></section>{/if}

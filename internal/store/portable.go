@@ -29,6 +29,7 @@ type PortableState struct {
 	Format            string                  `json:"format"`
 	Version           int                     `json:"version"`
 	Categories        []Category              `json:"categories"`
+	Epics             []Epic                  `json:"epics,omitempty"`
 	Items             []Item                  `json:"items"`
 	Plans             []Plan                  `json:"plans"`
 	Tasks             []Task                  `json:"tasks"`
@@ -50,6 +51,9 @@ func ExportState(database *sql.DB) ([]byte, error) {
 		return nil, err
 	}
 	if state.Items, err = ListItems(database); err != nil {
+		return nil, err
+	}
+	if state.Epics, err = ListEpics(database); err != nil {
 		return nil, err
 	}
 	if state.Plans, err = exportPlans(database); err != nil {
@@ -118,6 +122,9 @@ func ImportState(database *sql.DB, data []byte) error {
 		return err
 	}
 	if err := importCategories(transaction, state.Categories); err != nil {
+		return err
+	}
+	if err := importEpics(transaction, state.Epics); err != nil {
 		return err
 	}
 	if err := importItems(transaction, state.Items); err != nil {
@@ -236,6 +243,18 @@ func validatePortableState(state PortableState) error {
 		}
 		items[item.ID] = true
 	}
+	epics := map[int64]bool{}
+	for _, epic := range state.Epics {
+		if epics[epic.ID] {
+			return fmt.Errorf("duplicate epic ID %d", epic.ID)
+		}
+		epics[epic.ID] = true
+	}
+	for _, item := range state.Items {
+		if item.EpicID != nil && !epics[*item.EpicID] {
+			return fmt.Errorf("item %d references missing epic %d", item.ID, *item.EpicID)
+		}
+	}
 	for _, plan := range state.Plans {
 		if plans[plan.ID] {
 			return fmt.Errorf("duplicate plan ID %d", plan.ID)
@@ -323,7 +342,7 @@ func validatePortableState(state PortableState) error {
 }
 
 func ensureEmptyDestination(transaction *sql.Tx, state PortableState) error {
-	for _, table := range []string{"roadmap_items", "plan_revisions", "tasks", "feature_phase_records", "acceptance_criteria", "criterion_evidence", "task_events", "feature_relationships", "feature_change_links", "capability_state_history", "dossier_artifacts", "feature_reports"} {
+	for _, table := range []string{"epics", "roadmap_items", "plan_revisions", "tasks", "feature_phase_records", "acceptance_criteria", "criterion_evidence", "task_events", "feature_relationships", "feature_change_links", "capability_state_history", "dossier_artifacts", "feature_reports"} {
 		var count int
 		if err := transaction.QueryRow(`SELECT COUNT(*) FROM ` + table).Scan(&count); err != nil {
 			return err
@@ -339,6 +358,15 @@ func ensureEmptyDestination(transaction *sql.Tx, state PortableState) error {
 			return fmt.Errorf("category ID %d conflicts with %q", category.ID, name)
 		}
 		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+	}
+	return nil
+}
+
+func importEpics(transaction *sql.Tx, values []Epic) error {
+	for _, value := range values {
+		if _, err := transaction.Exec(`INSERT INTO epics(id,title,description,created_at,updated_at) VALUES(?,?,?,?,?)`, value.ID, value.Title, value.Description, value.CreatedAt, value.UpdatedAt); err != nil {
 			return err
 		}
 	}
@@ -366,7 +394,7 @@ func importCategories(transaction *sql.Tx, values []Category) error {
 }
 func importItems(transaction *sql.Tx, values []Item) error {
 	for _, value := range values {
-		if _, err := transaction.Exec(`INSERT INTO roadmap_items(id,title,description,category_id,horizon,status,rationale,created_at,updated_at,target_date,progress,priority,complexity,team,lead_engineer,technical_summary,specifications,documentation_links,feature_type,current_state) VALUES(?,?,?,(SELECT id FROM categories WHERE name=?),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, value.ID, value.Title, value.Description, value.Category, value.Horizon, value.Status, value.Rationale, value.CreatedAt, value.UpdatedAt, value.TargetDate, value.Progress, value.Priority, value.Complexity, value.Team, value.LeadEngineer, value.TechnicalSummary, value.Specifications, value.DocumentationLinks, value.FeatureType, value.CurrentState); err != nil {
+		if _, err := transaction.Exec(`INSERT INTO roadmap_items(id,title,description,category_id,horizon,status,rationale,created_at,updated_at,target_date,progress,priority,complexity,team,lead_engineer,technical_summary,specifications,documentation_links,feature_type,current_state,epic_id) VALUES(?,?,?,(SELECT id FROM categories WHERE name=?),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, value.ID, value.Title, value.Description, value.Category, value.Horizon, value.Status, value.Rationale, value.CreatedAt, value.UpdatedAt, value.TargetDate, value.Progress, value.Priority, value.Complexity, value.Team, value.LeadEngineer, value.TechnicalSummary, value.Specifications, value.DocumentationLinks, value.FeatureType, value.CurrentState, value.EpicID); err != nil {
 			return err
 		}
 	}

@@ -145,3 +145,38 @@ func TestItemDossierAndRelationshipCommands(t *testing.T) {
 		t.Fatalf("relationships = %#v", relationships)
 	}
 }
+
+func TestEpicAndItemParentCommands(t *testing.T) {
+	_, database := workflowTestProject(t)
+	defer database.Close()
+
+	command := NewRootCommand()
+	command.SetArgs([]string{"epic", "add", "--title", "Onboarding", "--description", "Account setup work"})
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	command = NewRootCommand()
+	command.SetArgs([]string{"item", "add", "--title", "Guided setup", "--category", "Needed", "--horizon", "Next", "--epic", "1"})
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	item, err := store.GetItem(database, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if item.EpicID == nil || *item.EpicID != 1 {
+		t.Fatalf("item EpicID = %v, want 1", item.EpicID)
+	}
+	command = NewRootCommand()
+	command.SetArgs([]string{"item", "update", "1", "--clear-epic"})
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	item, err = store.GetItem(database, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if item.EpicID != nil {
+		t.Fatalf("item EpicID = %v, want nil", *item.EpicID)
+	}
+}

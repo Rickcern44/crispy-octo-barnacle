@@ -22,6 +22,7 @@ type PlanPacket struct {
 }
 type PacketRoadmapItem struct {
 	ID          *int64 `json:"id,omitempty"`
+	EpicID      *int64 `json:"epic_id,omitempty"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
 	Category    string `json:"category"`
@@ -152,6 +153,15 @@ func recordApprovedPlan(database *sql.DB, packet PlanPacket, approvalNote string
 		return RecordedPlan{}, err
 	}
 	defer transaction.Rollback()
+	if packet.RoadmapItem.EpicID != nil {
+		var exists bool
+		if err := transaction.QueryRow(`SELECT EXISTS(SELECT 1 FROM epics WHERE id=?)`, *packet.RoadmapItem.EpicID).Scan(&exists); err != nil {
+			return RecordedPlan{}, err
+		}
+		if !exists {
+			return RecordedPlan{}, fmt.Errorf("epic %d not found", *packet.RoadmapItem.EpicID)
+		}
+	}
 	timestamp := now()
 	var itemID int64
 	if packet.RoadmapItem.ID != nil {
@@ -165,7 +175,7 @@ func recordApprovedPlan(database *sql.DB, packet PlanPacket, approvalNote string
 			return RecordedPlan{}, fmt.Errorf("roadmap item %d is not ready or in progress", itemID)
 		}
 	} else {
-		result, err := transaction.Exec(`INSERT INTO roadmap_items(title,description,category_id,horizon,status,rationale,created_at,updated_at) SELECT ?,?,id,?,'Ready',?,?,? FROM categories WHERE name=?`, packet.RoadmapItem.Title, packet.RoadmapItem.Description, packet.RoadmapItem.Horizon, packet.RoadmapItem.Rationale, timestamp, timestamp, packet.RoadmapItem.Category)
+		result, err := transaction.Exec(`INSERT INTO roadmap_items(title,description,category_id,horizon,status,rationale,created_at,updated_at,epic_id) SELECT ?,?,id,?,'Ready',?,?,?,? FROM categories WHERE name=?`, packet.RoadmapItem.Title, packet.RoadmapItem.Description, packet.RoadmapItem.Horizon, packet.RoadmapItem.Rationale, timestamp, timestamp, packet.RoadmapItem.EpicID, packet.RoadmapItem.Category)
 		if err != nil {
 			return RecordedPlan{}, err
 		}

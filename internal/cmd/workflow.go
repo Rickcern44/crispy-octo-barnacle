@@ -16,7 +16,7 @@ import (
 )
 
 func addWorkflowCommands(root *cobra.Command) {
-	root.AddCommand(categoryCommand(), itemCommand(), planCommand(), taskCommand())
+	root.AddCommand(categoryCommand(), epicCommand(), itemCommand(), planCommand(), taskCommand())
 }
 func databaseForCommand() (*sql.DB, error) {
 	workingDirectory, err := os.Getwd()
@@ -92,6 +92,7 @@ func categoryCommand() *cobra.Command {
 func itemCommand() *cobra.Command {
 	command := &cobra.Command{Use: "item", Short: "Manage roadmap items"}
 	var title, description, category, horizon, rationale string
+	var epicID int64
 	add := &cobra.Command{Use: "add", RunE: func(command *cobra.Command, _ []string) error {
 		for _, field := range []struct{ v, n string }{{title, "--title"}, {category, "--category"}, {horizon, "--horizon"}} {
 			if err := required(field.v, field.n); err != nil {
@@ -103,9 +104,23 @@ func itemCommand() *cobra.Command {
 			return err
 		}
 		defer database.Close()
+		if command.Flags().Changed("epic") {
+			if epicID < 1 {
+				return fmt.Errorf("invalid Epic ID %d", epicID)
+			}
+			if _, err := store.GetEpic(database, epicID); err != nil {
+				return err
+			}
+		}
 		value, err := store.AddItem(database, title, description, category, horizon, rationale)
 		if err != nil {
 			return err
+		}
+		if command.Flags().Changed("epic") {
+			value, err = store.SetItemEpic(database, value.ID, &epicID)
+			if err != nil {
+				return err
+			}
 		}
 		return output(command, value, false)
 	}}
@@ -114,6 +129,7 @@ func itemCommand() *cobra.Command {
 	add.Flags().StringVar(&category, "category", "", "category name")
 	add.Flags().StringVar(&horizon, "horizon", "", "Now, Next, or Later")
 	add.Flags().StringVar(&rationale, "rationale", "", "item rationale")
+	add.Flags().Int64Var(&epicID, "epic", 0, "optional Epic ID")
 	var asJSON bool
 	list := &cobra.Command{Use: "list", RunE: func(command *cobra.Command, _ []string) error {
 		database, err := databaseForCommand()
@@ -217,6 +233,8 @@ func showItemCommand() *cobra.Command {
 }
 func updateItemCommand() *cobra.Command {
 	var title, description, category, horizon, rationale, featureType string
+	var epicID int64
+	var clearEpic bool
 	command := &cobra.Command{Use: "update ID", Args: cobra.ExactArgs(1), RunE: func(command *cobra.Command, args []string) error {
 		value, err := id(args[0])
 		if err != nil {
@@ -241,7 +259,10 @@ func updateItemCommand() *cobra.Command {
 		if command.Flags().Changed("feature-type") {
 			ft = &featureType
 		}
-		if t == nil && d == nil && c == nil && h == nil && r == nil && ft == nil {
+		if command.Flags().Changed("epic") && clearEpic {
+			return fmt.Errorf("use either --epic or --clear-epic")
+		}
+		if t == nil && d == nil && c == nil && h == nil && r == nil && ft == nil && !command.Flags().Changed("epic") && !clearEpic {
 			return fmt.Errorf("provide an item field to update")
 		}
 		database, err := databaseForCommand()
@@ -249,6 +270,9 @@ func updateItemCommand() *cobra.Command {
 			return err
 		}
 		defer database.Close()
+		if command.Flags().Changed("epic") && epicID < 1 {
+			return fmt.Errorf("invalid Epic ID %d", epicID)
+		}
 		item, err := store.GetItem(database, value)
 		if t != nil || d != nil || c != nil || h != nil || r != nil {
 			item, err = store.UpdateItem(database, value, t, d, c, h, r)
@@ -262,6 +286,18 @@ func updateItemCommand() *cobra.Command {
 				return err
 			}
 		}
+		if command.Flags().Changed("epic") {
+			item, err = store.SetItemEpic(database, value, &epicID)
+			if err != nil {
+				return err
+			}
+		}
+		if clearEpic {
+			item, err = store.SetItemEpic(database, value, nil)
+			if err != nil {
+				return err
+			}
+		}
 		return output(command, item, false)
 	}}
 	command.Flags().StringVar(&title, "title", "", "item title")
@@ -270,6 +306,114 @@ func updateItemCommand() *cobra.Command {
 	command.Flags().StringVar(&horizon, "horizon", "", "Now, Next, or Later")
 	command.Flags().StringVar(&rationale, "rationale", "", "item rationale")
 	command.Flags().StringVar(&featureType, "feature-type", "", "Capability, Change, or Gap")
+	command.Flags().Int64Var(&epicID, "epic", 0, "assign to Epic ID")
+	command.Flags().BoolVar(&clearEpic, "clear-epic", false, "remove the Epic parent")
+	return command
+}
+
+func epicCommand() *cobra.Command {
+	command := &cobra.Command{Use: "epic", Short: "Manage optional Feature groups"}
+	var title, description string
+	add := &cobra.Command{Use: "add", RunE: func(command *cobra.Command, _ []string) error {
+		if err := required(title, "--title"); err != nil {
+			return err
+		}
+		database, err := databaseForCommand()
+		if err != nil {
+			return err
+		}
+		defer database.Close()
+		value, err := store.AddEpic(database, title, description)
+		if err != nil {
+			return err
+		}
+		return output(command, value, false)
+	}}
+	add.Flags().StringVar(&title, "title", "", "Epic title")
+	add.Flags().StringVar(&description, "description", "", "Epic description")
+	var asJSON bool
+	list := &cobra.Command{Use: "list", RunE: func(command *cobra.Command, _ []string) error {
+		database, err := databaseForCommand()
+		if err != nil {
+			return err
+		}
+		defer database.Close()
+		values, err := store.ListEpics(database)
+		if err != nil {
+			return err
+		}
+		return output(command, values, asJSON)
+	}}
+	list.Flags().BoolVar(&asJSON, "json", false, "emit JSON")
+	show := &cobra.Command{Use: "show ID", Args: cobra.ExactArgs(1), RunE: func(command *cobra.Command, args []string) error {
+		value, err := id(args[0])
+		if err != nil {
+			return err
+		}
+		database, err := databaseForCommand()
+		if err != nil {
+			return err
+		}
+		defer database.Close()
+		epic, err := store.GetEpic(database, value)
+		if err != nil {
+			return err
+		}
+		if asJSON {
+			features, err := store.ListEpicItems(database, value)
+			if err != nil {
+				return err
+			}
+			return output(command, struct {
+				store.Epic
+				Features []store.Item `json:"features"`
+			}{Epic: epic, Features: features}, true)
+		}
+		return output(command, epic, false)
+	}}
+	show.Flags().BoolVar(&asJSON, "json", false, "emit JSON")
+	var updateTitle, updateDescription string
+	update := &cobra.Command{Use: "update ID", Args: cobra.ExactArgs(1), RunE: func(command *cobra.Command, args []string) error {
+		value, err := id(args[0])
+		if err != nil {
+			return err
+		}
+		var t, d *string
+		if command.Flags().Changed("title") {
+			t = &updateTitle
+		}
+		if command.Flags().Changed("description") {
+			d = &updateDescription
+		}
+		if t == nil && d == nil {
+			return fmt.Errorf("provide an Epic field to update")
+		}
+		database, err := databaseForCommand()
+		if err != nil {
+			return err
+		}
+		defer database.Close()
+		epic, err := store.UpdateEpic(database, value, t, d)
+		if err != nil {
+			return err
+		}
+		return output(command, epic, false)
+	}}
+	update.Flags().StringVar(&updateTitle, "title", "", "Epic title")
+	update.Flags().StringVar(&updateDescription, "description", "", "Epic description")
+	remove := &cobra.Command{Use: "delete ID", Args: cobra.ExactArgs(1), RunE: func(command *cobra.Command, args []string) error {
+		value, err := id(args[0])
+		if err != nil {
+			return err
+		}
+		database, err := databaseForCommand()
+		if err != nil {
+			return err
+		}
+		defer database.Close()
+		return store.DeleteEpic(database, value)
+	}}
+	command.AddCommand(add, list, show, update, remove)
 	return command
 }
 

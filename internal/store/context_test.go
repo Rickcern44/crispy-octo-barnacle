@@ -219,3 +219,34 @@ func TestDefaultContextProjectsCapabilitiesChangesAndGaps(t *testing.T) {
 		t.Fatalf("dossier projections = %#v", context.Counts)
 	}
 }
+
+func TestContextProjectsEpicParentAndNavigation(t *testing.T) {
+	database := openTestDatabase(t)
+	epic, err := AddEpic(database, "Onboarding", "Account setup work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorded, err := RecordApprovedPlan(database, PlanPacket{
+		RoadmapItem:        PacketRoadmapItem{Title: "Guided setup", Category: "Needed", Horizon: "Now", EpicID: &epic.ID},
+		Goal:               "Guide setup",
+		AcceptanceCriteria: []PacketCriterion{{Title: "Setup is guided"}},
+		Tasks:              []PacketTask{{Title: "Implement setup", Verification: []string{"go test ./internal/store"}}},
+	}, "approved")
+	if err != nil {
+		t.Fatal(err)
+	}
+	compact, err := CompactContext(database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if compact.Counts.Epics != 1 || len(compact.Epics) != 1 || compact.Epics[0].Command != "cassor epic show 1" {
+		t.Fatalf("Epic navigation = %#v", compact)
+	}
+	scoped, err := BuildScopedContext(database, recorded.Plan.ItemID, "implementation", 12000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scoped.Epic == nil || scoped.Epic.ID != epic.ID || scoped.Epic.Title != epic.Title {
+		t.Fatalf("Epic parent = %#v", scoped.Epic)
+	}
+}

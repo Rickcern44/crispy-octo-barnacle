@@ -12,6 +12,13 @@ type Category struct {
 	Name      string `json:"name"`
 	CreatedAt string `json:"created_at"`
 }
+type Epic struct {
+	ID          int64  `json:"id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
+}
 type Item struct {
 	ID                 int64  `json:"id"`
 	Title              string `json:"title"`
@@ -33,7 +40,122 @@ type Item struct {
 	DocumentationLinks string `json:"documentation_links"`
 	FeatureType        string `json:"feature_type"`
 	CurrentState       string `json:"current_state"`
+	EpicID             *int64 `json:"epic_id,omitempty"`
 }
+
+func AddEpic(database *sql.DB, title, description string) (Epic, error) {
+	timestamp := now()
+	result, err := database.Exec(`INSERT INTO epics(title,description,created_at,updated_at) VALUES(?,?,?,?)`, title, description, timestamp, timestamp)
+	if err != nil {
+		return Epic{}, fmt.Errorf("add epic: %w", err)
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return Epic{}, err
+	}
+	return GetEpic(database, id)
+}
+
+func GetEpic(database *sql.DB, id int64) (Epic, error) {
+	var value Epic
+	err := database.QueryRow(`SELECT id,title,description,created_at,updated_at FROM epics WHERE id=?`, id).Scan(&value.ID, &value.Title, &value.Description, &value.CreatedAt, &value.UpdatedAt)
+	if err == sql.ErrNoRows {
+		return value, fmt.Errorf("epic %d not found", id)
+	}
+	return value, err
+}
+
+func ListEpics(database *sql.DB) ([]Epic, error) {
+	rows, err := database.Query(`SELECT id,title,description,created_at,updated_at FROM epics ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	values := []Epic{}
+	for rows.Next() {
+		var value Epic
+		if err := rows.Scan(&value.ID, &value.Title, &value.Description, &value.CreatedAt, &value.UpdatedAt); err != nil {
+			return nil, err
+		}
+		values = append(values, value)
+	}
+	return values, rows.Err()
+}
+
+func UpdateEpic(database *sql.DB, id int64, title, description *string) (Epic, error) {
+	value, err := GetEpic(database, id)
+	if err != nil {
+		return value, err
+	}
+	if title != nil {
+		value.Title = *title
+	}
+	if description != nil {
+		value.Description = *description
+	}
+	if _, err := database.Exec(`UPDATE epics SET title=?,description=?,updated_at=? WHERE id=?`, value.Title, value.Description, now(), id); err != nil {
+		return value, err
+	}
+	return GetEpic(database, id)
+}
+
+func DeleteEpic(database *sql.DB, id int64) error {
+	if _, err := GetEpic(database, id); err != nil {
+		return err
+	}
+	var children int
+	if err := database.QueryRow(`SELECT COUNT(*) FROM roadmap_items WHERE epic_id=?`, id).Scan(&children); err != nil {
+		return err
+	}
+	if children > 0 {
+		return fmt.Errorf("epic %d has %d child features; move or ungroup them first", id, children)
+	}
+	result, err := database.Exec(`DELETE FROM epics WHERE id=?`, id)
+	if err != nil {
+		return err
+	}
+	if count, _ := result.RowsAffected(); count == 0 {
+		return fmt.Errorf("epic %d not found", id)
+	}
+	return nil
+}
+
+// SetItemEpic assigns an optional Epic parent. A nil epicID ungroups the item.
+func SetItemEpic(database *sql.DB, itemID int64, epicID *int64) (Item, error) {
+	if _, err := GetItem(database, itemID); err != nil {
+		return Item{}, err
+	}
+	if epicID != nil {
+		if _, err := GetEpic(database, *epicID); err != nil {
+			return Item{}, err
+		}
+	}
+	if _, err := database.Exec(`UPDATE roadmap_items SET epic_id=?,updated_at=? WHERE id=?`, epicID, now(), itemID); err != nil {
+		return Item{}, err
+	}
+	return GetItem(database, itemID)
+}
+
+func ListEpicItems(database *sql.DB, epicID int64) ([]Item, error) {
+	if _, err := GetEpic(database, epicID); err != nil {
+		return nil, err
+	}
+	rows, err := database.Query(`SELECT `+itemColumns+` WHERE i.epic_id=? ORDER BY i.id`, epicID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	values := []Item{}
+	for rows.Next() {
+		value, err := scanItem(rows)
+		if err != nil {
+			return nil, err
+		}
+		values = append(values, value)
+	}
+	return values, rows.Err()
+}
+
 type FeatureRelationship struct {
 	ID               int64  `json:"id"`
 	SourceItemID     int64  `json:"source_item_id"`
@@ -124,11 +246,11 @@ func AddItem(database *sql.DB, title, description, category, horizon, rationale 
 }
 func scanItem(scanner interface{ Scan(...any) error }) (Item, error) {
 	var value Item
-	err := scanner.Scan(&value.ID, &value.Title, &value.Description, &value.Category, &value.Horizon, &value.Status, &value.Rationale, &value.CreatedAt, &value.UpdatedAt, &value.TargetDate, &value.Progress, &value.Priority, &value.Complexity, &value.Team, &value.LeadEngineer, &value.TechnicalSummary, &value.Specifications, &value.DocumentationLinks, &value.FeatureType, &value.CurrentState)
+	err := scanner.Scan(&value.ID, &value.Title, &value.Description, &value.Category, &value.Horizon, &value.Status, &value.Rationale, &value.CreatedAt, &value.UpdatedAt, &value.TargetDate, &value.Progress, &value.Priority, &value.Complexity, &value.Team, &value.LeadEngineer, &value.TechnicalSummary, &value.Specifications, &value.DocumentationLinks, &value.FeatureType, &value.CurrentState, &value.EpicID)
 	return value, err
 }
 
-const itemColumns = `i.id, i.title, i.description, c.name, i.horizon, i.status, i.rationale, i.created_at, i.updated_at, i.target_date, i.progress, i.priority, i.complexity, i.team, i.lead_engineer, i.technical_summary, i.specifications, i.documentation_links, i.feature_type, i.current_state FROM roadmap_items i JOIN categories c ON c.id=i.category_id`
+const itemColumns = `i.id, i.title, i.description, c.name, i.horizon, i.status, i.rationale, i.created_at, i.updated_at, i.target_date, i.progress, i.priority, i.complexity, i.team, i.lead_engineer, i.technical_summary, i.specifications, i.documentation_links, i.feature_type, i.current_state, i.epic_id FROM roadmap_items i JOIN categories c ON c.id=i.category_id`
 
 func UpdateItemMetadata(database *sql.DB, id int64, targetDate string, progress int, priority, complexity, team, lead, summary, specs, links string) (Item, error) {
 	_, err := database.Exec(`UPDATE roadmap_items SET target_date=?,progress=?,priority=?,complexity=?,team=?,lead_engineer=?,technical_summary=?,specifications=?,documentation_links=?,updated_at=? WHERE id=?`, targetDate, progress, priority, complexity, team, lead, summary, specs, links, now(), id)

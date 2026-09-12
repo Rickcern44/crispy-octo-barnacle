@@ -25,6 +25,20 @@ cassor plan record --file plan.json --approve --approved-by-user
 
 Use `cassor --help` and its command-specific help for operational details.
 
+## Optional Epic grouping
+
+Features can be grouped under an optional Epic. Existing Features remain
+ungrouped until assigned, and dependency relationships remain separate from
+this containment hierarchy.
+
+```sh
+cassor epic add --title "Improve onboarding" --description "Related account setup outcomes"
+cassor item add --title "Add guided setup" --category Needed --horizon Next --epic 1
+cassor item update 1 --clear-epic
+```
+
+Use `cassor epic show 1 --json` to see the Epic and its child Features.
+
 ## Development
 
 Cassor requires Go 1.26 or newer.

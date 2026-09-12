@@ -39,11 +39,20 @@ export type DossierArtifact = {
 	author_role: string;
 };
 
+export type Epic = {
+	id: number;
+	title: string;
+	description: string;
+	created_at: string;
+	updated_at: string;
+};
+
 type RoadmapSource = typeof sourceRoadmap & {
 	generated_at?: string;
 	change_links?: FeatureChangeLink[];
 	capability_state_history?: CapabilityState[];
 	dossier_artifacts?: DossierArtifact[];
+	epics?: Epic[];
 };
 
 export type Roadmap = RoadmapSource & {
@@ -51,9 +60,12 @@ export type Roadmap = RoadmapSource & {
 	change_links: FeatureChangeLink[];
 	capability_state_history: CapabilityState[];
 	dossier_artifacts: DossierArtifact[];
+	epics: Epic[];
 };
 
-export type Item = Roadmap["items"][number];
+export type Item = Roadmap["items"][number] & {
+	epic_id?: number | null;
+};
 
 const source = sourceRoadmap as RoadmapSource;
 export const roadmap = {
@@ -62,12 +74,14 @@ export const roadmap = {
 	change_links: source.change_links ?? [],
 	capability_state_history: source.capability_state_history ?? [],
 	dossier_artifacts: source.dossier_artifacts ?? [],
+	epics: source.epics ?? [],
 } as Roadmap;
 
 const relationships: FeatureRelationship[] = roadmap.relationships;
 const changeLinks: FeatureChangeLink[] = roadmap.change_links;
 const capabilityStates: CapabilityState[] = roadmap.capability_state_history;
 const dossierArtifacts: DossierArtifact[] = roadmap.dossier_artifacts;
+const epics = new Map((roadmap.epics as Epic[]).map((epic) => [epic.id, epic]));
 
 const planItemIDs = new Map(
 	roadmap.plans.map((plan) => [plan.id, plan.item_id]),
@@ -107,6 +121,16 @@ export function specificationsForItem(item: Item): Specification[] {
 	} catch {
 		return [];
 	}
+}
+
+export function epicForItem(item: Item): Epic | undefined {
+	return item.epic_id === undefined || item.epic_id === null
+		? undefined
+		: epics.get(item.epic_id);
+}
+
+export function featuresForEpic(epicID: number): Item[] {
+	return (roadmap.items as Item[]).filter((item) => item.epic_id === epicID);
 }
 
 export const shippedFeatureCount = roadmap.items.filter(
